@@ -65,17 +65,23 @@ export async function POST(request: NextRequest) {
     
     // 成功レスポンスを返す
     return NextResponse.json(quiz);
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error generating quiz:', error);
-    console.error('Error details:', error.stack);
+    
+    // エラーオブジェクトの安全な処理
+    const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorCause = error instanceof Error && error.cause ? String(error.cause) : 'unknown';
+    
+    console.error('Error details:', errorStack);
     
     // エラーレスポンスを返す
     return NextResponse.json(
       { 
         message: 'クイズの生成に失敗しました', 
-        error: error.message,
-        stack: error.stack,
-        cause: error.cause ? String(error.cause) : 'unknown' 
+        error: errorMessage,
+        stack: errorStack,
+        cause: errorCause 
       }, 
       { status: 500 }
     );

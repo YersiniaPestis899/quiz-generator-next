@@ -44,7 +44,10 @@ export async function GET(request: NextRequest) {
       } catch (quizError) {
         console.error(`Error fetching quiz ${idParam}:`, quizError);
         return NextResponse.json(
-          { message: '特定のクイズ取得に失敗しました', error: quizError.message }, 
+          { 
+            message: '特定のクイズ取得に失敗しました', 
+            error: quizError instanceof Error ? quizError.message : '不明なエラー'
+          }, 
           { status: 500 }
         );
       }
@@ -59,20 +62,29 @@ export async function GET(request: NextRequest) {
     } catch (quizError) {
       console.error('Error fetching quizzes:', quizError);
       return NextResponse.json(
-        { message: 'クイズ一覧の取得に失敗しました', error: quizError.message }, 
+        { 
+          message: 'クイズ一覧の取得に失敗しました', 
+          error: quizError instanceof Error ? quizError.message : '不明なエラー' 
+        }, 
         { status: 500 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Detailed error in /api/quizzes:', error);
-    console.error('Error details:', error.stack);
+    
+    // エラーオブジェクトの安全な処理
+    const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorCause = error instanceof Error && error.cause ? String(error.cause) : 'unknown';
+    
+    console.error('Error details:', errorStack);
     
     return NextResponse.json(
       { 
         message: 'クイズの取得に失敗しました', 
-        error: error.message, 
-        stack: error.stack,
-        cause: error.cause ? String(error.cause) : 'unknown' 
+        error: errorMessage, 
+        stack: errorStack,
+        cause: errorCause 
       }, 
       { status: 500 }
     );
