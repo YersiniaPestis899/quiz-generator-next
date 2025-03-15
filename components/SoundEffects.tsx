@@ -5,10 +5,10 @@ import {
   playCorrectSound, 
   playIncorrectSound, 
   playCompleteSound, 
-  playPerfectSound, 
-  playLowScoreSound, 
   playCountdownSound, 
   playButtonClickSound,
+  playPerfectSound,
+  playLowScoreSound,
   initAudio
 } from '@/lib/soundGenerator';
 
@@ -24,7 +24,8 @@ interface SoundEffectsProps {
 
 /**
  * サウンドエフェクトコンポーネント
- * プロパティで指定されたタイミングでサウンドを再生
+ * ゲーム内イベントに対応する音響効果を管理
+ * 実装アプローチ: 外部ファイル不要の数学的音響合成
  */
 export default function SoundEffects({
   playCorrect = false,
@@ -41,71 +42,75 @@ export default function SoundEffects({
   useEffect(() => {
     if (!audioInitialized.current) {
       const initializeAudio = () => {
+        console.log('Initializing audio from user interaction');
         initAudio();
         document.removeEventListener('click', initializeAudio);
         document.removeEventListener('keydown', initializeAudio);
+        document.removeEventListener('touchstart', initializeAudio);
         audioInitialized.current = true;
       };
       
       document.addEventListener('click', initializeAudio);
       document.addEventListener('keydown', initializeAudio);
+      document.addEventListener('touchstart', initializeAudio);
       
       return () => {
         document.removeEventListener('click', initializeAudio);
         document.removeEventListener('keydown', initializeAudio);
+        document.removeEventListener('touchstart', initializeAudio);
       };
     }
   }, []);
   
-  // 正解音
+  // 正解音再生
   useEffect(() => {
     if (playCorrect && audioInitialized.current) {
       playCorrectSound();
     }
   }, [playCorrect]);
   
-  // 不正解音
+  // 不正解音再生
   useEffect(() => {
     if (playIncorrect && audioInitialized.current) {
       playIncorrectSound();
     }
   }, [playIncorrect]);
   
-  // 完了音
+  // 完了音再生（通常スコア）
   useEffect(() => {
     if (playComplete && audioInitialized.current) {
       playCompleteSound();
     }
   }, [playComplete]);
   
-  // パーフェクト音
+  // パーフェクトスコア音再生（100%）
   useEffect(() => {
     if (playPerfect && audioInitialized.current) {
       playPerfectSound();
     }
   }, [playPerfect]);
   
-  // 低スコア音
+  // 低スコア音再生（50%未満）
   useEffect(() => {
     if (playLowScore && audioInitialized.current) {
       playLowScoreSound();
     }
   }, [playLowScore]);
   
-  // カウントダウン音
+  // カウントダウン音再生
   useEffect(() => {
     if (playCountdown && audioInitialized.current) {
       playCountdownSound();
     }
   }, [playCountdown]);
   
-  // ボタンクリック音
+  // ボタンクリック音再生
   useEffect(() => {
     if (playButtonClick && audioInitialized.current) {
       playButtonClickSound();
     }
   }, [playButtonClick]);
   
-  // 描画を行わないコンポーネント
+  // 視覚的出力なし
   return null;
 }
