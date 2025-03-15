@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { Quiz } from '@/lib/types';
+import { Confetti, AnswerEffect, PerfectConfetti } from './SpecialEffects';
+import SoundEffects from './SoundEffects';
 
 interface QuizDisplayProps {
   quiz: Quiz;
@@ -23,6 +25,15 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
   const [isCountingDown, setIsCountingDown] = useState(false); // カウントダウン進行中フラグ
   const [isPreparationPhase, setIsPreparationPhase] = useState(false); // 準備フェーズフラグ
   const [answerTimeLeft, setAnswerTimeLeft] = useState<number | null>(null); // 回答時間制限
+  
+  // サウンドエフェクト用のステート
+  const [playCorrectSound, setPlayCorrectSound] = useState(false);
+  const [playIncorrectSound, setPlayIncorrectSound] = useState(false);
+  const [playCompleteSound, setPlayCompleteSound] = useState(false);
+  const [playPerfectSound, setPlayPerfectSound] = useState(false);
+  const [playLowScoreSound, setPlayLowScoreSound] = useState(false);
+  const [playCountdownSound, setPlayCountdownSound] = useState(false);
+  const [playButtonClickSound, setPlayButtonClickSound] = useState(false);
   
   // クイズデータが無効な場合のフォールバック表示
   if (!quiz || !quiz.questions || quiz.questions.length === 0) {
@@ -58,9 +69,18 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
     setLastAnswerCorrect(isCorrect);
     setShowAnswerEffect(true);
     
+    // 正解・不正解音再生
+    if (isCorrect) {
+      setPlayCorrectSound(true);
+    } else {
+      setPlayIncorrectSound(true);
+    }
+    
     // エフェクトリセット
     setTimeout(() => {
       setShowAnswerEffect(false);
+      setPlayCorrectSound(false);
+      setPlayIncorrectSound(false);
     }, 1000);
   };
   
@@ -68,6 +88,10 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
    * 次の質問へ進むハンドラー
    */
   const handleNext = () => {
+    // ボタンクリック音
+    setPlayButtonClickSound(true);
+    setTimeout(() => setPlayButtonClickSound(false), 300);
+    
     // 回答時間タイマーをリセット
     setAnswerTimeLeft(null);
     
@@ -76,6 +100,8 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
       setCountdown(3);
       setIsPreparationPhase(true);
       setIsCountingDown(true);
+      setPlayCountdownSound(true);
+      setTimeout(() => setPlayCountdownSound(false), 500);
       
       // 次の質問に移動
       setCurrentQuestion(currentQuestion + 1);
@@ -83,16 +109,24 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
       // 最後の問題の場合は結果表示へ直接遷移
       setShowResults(true);
       
-      // 正答率に応じたエフェクト
+      // 正答率に応じたエフェクトとサウンド
       const score = calculateScore();
       const percentage = Math.round((score / quiz.questions.length) * 100);
       
       if (percentage === 100) {
         // パーフェクトスコア: 特別演出
         setShowPerfectConfetti(true);
+        setPlayPerfectSound(true);
+        setTimeout(() => setPlayPerfectSound(false), 3000);
       } else if (percentage >= 50) {
         // 50%以上: 通常の演出
         setShowConfetti(true);
+        setPlayCompleteSound(true);
+        setTimeout(() => setPlayCompleteSound(false), 1000);
+      } else {
+        // 50%未満: 残念な演出
+        setPlayLowScoreSound(true);
+        setTimeout(() => setPlayLowScoreSound(false), 1000);
       }
     }
   };
@@ -114,6 +148,8 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
     setCountdown(3);
     setIsPreparationPhase(true);
     setIsCountingDown(true);
+    setPlayCountdownSound(true);
+    setTimeout(() => setPlayCountdownSound(false), 500);
   }, [quiz.id]); // quiz.idが変わった時のみ実行
   
   // 準備フェーズのカウントダウン処理
@@ -125,6 +161,9 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
       // カウントダウン進行中
       const timer = setTimeout(() => {
         setCountdown(countdown - 1);
+        // カウントダウン音を鳴らす
+        setPlayCountdownSound(true);
+        setTimeout(() => setPlayCountdownSound(false), 200);
       }, 1000);
       return () => clearTimeout(timer);
     } else {
@@ -156,6 +195,9 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
       setCountdown(null);
       setAnswerTimeLeft(null);
       setCurrentQuestion(currentQuestion - 1);
+      // ボタンクリック音
+      setPlayButtonClickSound(true);
+      setTimeout(() => setPlayButtonClickSound(false), 300);
     }
   };
   
@@ -190,6 +232,12 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
     setCountdown(3);
     setIsPreparationPhase(true);
     setIsCountingDown(true);
+    setPlayCountdownSound(true);
+    setTimeout(() => setPlayCountdownSound(false), 500);
+    
+    // ボタンクリック音
+    setPlayButtonClickSound(true);
+    setTimeout(() => setPlayButtonClickSound(false), 300);
   };
   
   // 結果表示モードの場合
@@ -233,6 +281,17 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
     
     return (
       <>
+        {/* サウンドエフェクトコンポーネント */}
+        <SoundEffects
+          playCorrect={playCorrectSound}
+          playIncorrect={playIncorrectSound}
+          playComplete={playCompleteSound}
+          playPerfect={playPerfectSound}
+          playLowScore={playLowScoreSound}
+          playCountdown={playCountdownSound}
+          playButtonClick={playButtonClickSound}
+        />
+      
         {percentage >= 50 && percentage < 100 && showConfetti && (
           <div className="confetti-container">
             {Array.from({ length: 50 }).map((_, i) => (
@@ -350,8 +409,19 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
   // 通常のクイズ表示モード
   return (
     <>
+      {/* サウンドエフェクトコンポーネント */}
+      <SoundEffects
+        playCorrect={playCorrectSound}
+        playIncorrect={playIncorrectSound}
+        playComplete={playCompleteSound}
+        playPerfect={playPerfectSound}
+        playLowScore={playLowScoreSound}
+        playCountdown={playCountdownSound}
+        playButtonClick={playButtonClickSound}
+      />
+    
       {showAnswerEffect && (
-        <div className={lastAnswerCorrect ? "correct-answer-effect" : "incorrect-answer-effect"} />
+        <AnswerEffect isCorrect={lastAnswerCorrect} active={showAnswerEffect} />
       )}
       
       <div className="quiz-display card">
