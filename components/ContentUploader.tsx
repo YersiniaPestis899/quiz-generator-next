@@ -2,6 +2,8 @@
 
 import { useState, FormEvent, useRef, useEffect } from 'react';
 import { Quiz } from '@/lib/types';
+import { playButtonClickSound } from '@/lib/soundGenerator';
+import ContentSuggestions from './ContentSuggestions';
 
 interface ContentUploaderProps {
   onQuizGenerated: (quiz: Quiz) => void;
@@ -32,18 +34,32 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
       if (typeof window !== 'undefined') {
         const storedAnonymousId = localStorage.getItem('anonymousUserId');
         if (storedAnonymousId) {
+          console.log('Loaded anonymousId from localStorage:', storedAnonymousId);
           setAnonymousId(storedAnonymousId);
         } else {
           // 新規匿名IDを生成して保存
           const newAnonymousId = `anon_${Math.random().toString(36).substring(2, 15)}`;
+          console.log('Generated new anonymousId:', newAnonymousId);
           localStorage.setItem('anonymousUserId', newAnonymousId);
           setAnonymousId(newAnonymousId);
         }
       }
-    } catch (storageError) {
-      console.error('Error accessing localStorage:', storageError);
+    } catch (err) {
+      console.error('Error handling localStorage:', err);
+      // エラー時には一時的なIDを作成
+      const tempId = `anon_temp_${Math.random().toString(36).substring(2, 15)}`;
+      setAnonymousId(tempId);
     }
   }, []);
+  
+  // サジェスチョンクリックハンドラー
+  const handleSuggestionClick = (suggestion: string) => {
+    setContent(suggestion);
+    // 選択後にフォーカスを維持
+    if (contentInputRef.current) {
+      contentInputRef.current.focus();
+    }
+  };
 
   /**
    * フォーム送信ハンドラー
@@ -55,7 +71,15 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
     setError(null);
     setGenerationProgress(0);
     
+    // クリック音再生
+    playButtonClickSound();
+    
     try {
+      // 匿名IDがない場合は処理を中止
+      if (!anonymousId) {
+        throw new Error('ユーザー識別情報が取得できませんでした。ページを再読み込みしてください。');
+      }
+      
       // 問題数が多い場合のユーザーへの通知
       if (numQuestions > 6) {
         setGenerationProgress(10);
@@ -74,12 +98,8 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
           setGenerationProgress(null);
         };
         
-        // APIリクエスト
-        const apiUrl = anonymousId 
-          ? `/api/generate?anonymousId=${encodeURIComponent(anonymousId)}`
-          : '/api/generate';
-          
-        const response = await fetch(apiUrl, {
+        // APIリクエスト - 匿名IDをクエリパラメータとして追加
+        const response = await fetch(`/api/generate?anonymousId=${encodeURIComponent(anonymousId)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -106,12 +126,8 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
         setTitle('');
         setContent('');
       } else {
-        // 従来の処理（少ない問題数の場合）
-        const apiUrl = anonymousId 
-          ? `/api/generate?anonymousId=${encodeURIComponent(anonymousId)}`
-          : '/api/generate';
-          
-        const response = await fetch(apiUrl, {
+        // 従来の処理（少ない問題数の場合）- 匿名IDをクエリパラメータとして追加
+        const response = await fetch(`/api/generate?anonymousId=${encodeURIComponent(anonymousId)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -153,7 +169,9 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
   };
 
   return (
-    <div className="card-content">
+    <div className="card">
+      <h3 className="text-xl mb-4">新しいクイズを生成</h3>
+      
       {error && <div className="error">{error}</div>}
       
       <form onSubmit={handleSubmit}>
@@ -183,6 +201,10 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
             className="focus:ring-2 focus:ring-primary focus:outline-none text-base h-[60vh] min-h-[400px] w-full m-0"
             ref={contentInputRef}
             disabled={loading}
+          />
+          <ContentSuggestions 
+            inputValue={content} 
+            onSuggestionClick={handleSuggestionClick} 
           />
           <div className="input-helper-text">
             単語やフレーズでもOK！<span>例: 「なぞなぞ」「漢字」「英語」「プログラミング」</span>

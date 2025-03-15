@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getQuizzes, getQuiz, addUserIdColumnIfNeeded } from '@/lib/supabase';
+import { getUserIdOrAnonymousId } from '@/lib/auth';
+
+// これは実際の実装です - Supabaseからデータを取得
 
 /**
  * GET /api/quizzes
@@ -6,51 +10,70 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(request: NextRequest) {
   try {
-    // 本来はデータベース接続やクイズの取得処理を行う
-    // ビルド時のみの仮実装としてサンプルデータを返す
+    console.log('API: Received request to fetch quizzes');
+    // URLからクイズIDとユーザーの匿名IDを抽出
+    const url = new URL(request.url);
+    const idParam = url.searchParams.get('id');
+    const anonymousId = url.searchParams.get('anonymousId');
     
-    const sampleQuizzes = [
-      {
-        id: "550e8400-e29b-41d4-a716-446655440000",
-        title: "サンプルクイズ - プログラミング基礎",
-        difficulty: "medium",
-        created_at: new Date().toISOString(),
-        user_id: "anon_default",
-        questions: [
-          {
-            id: "q1",
-            text: "JavaScriptの基本的なデータ型はどれですか？",
-            answers: [
-              { id: "a1", text: "String" },
-              { id: "a2", text: "Block" },
-              { id: "a3", text: "Circuit" },
-              { id: "a4", text: "Path" }
-            ],
-            correctAnswerId: "a1",
-            explanation: "JavaScriptの基本的なデータ型には、String、Number、Boolean、Null、Undefinedなどがあります。"
-          },
-          {
-            id: "q2",
-            text: "HTMLの略称は何ですか？",
-            answers: [
-              { id: "a1", text: "Hyper Text Markup Language" },
-              { id: "a2", text: "High Tech Modern Language" },
-              { id: "a3", text: "Hyperlink Text Management Logic" },
-              { id: "a4", text: "Home Tool Markup Language" }
-            ],
-            correctAnswerId: "a1",
-            explanation: "HTMLはHyper Text Markup Languageの略で、ウェブページを作成するための標準マークアップ言語です。"
-          }
-        ]
-      }
-    ];
+    console.log('API Request parameters:', { idParam, anonymousId });
 
-    return NextResponse.json(sampleQuizzes);
+    // データベースカラム構造を確認
+    console.log('API: Checking database column structure...');
+    const columnCheck = await addUserIdColumnIfNeeded();
+    console.log('Column check result:', columnCheck);
+
+    // 現在のユーザーIDを取得
+    console.log('API: Getting user ID...');
+    const userId = anonymousId || await getUserIdOrAnonymousId();
+    console.log('User ID for query:', userId);
+    
+    // IDが指定されている場合は特定のクイズを取得
+    if (idParam) {
+      try {
+        const quiz = await getQuiz(idParam, userId);
+        
+        if (!quiz) {
+          return NextResponse.json(
+            { message: '指定されたIDのクイズが見つかりませんでした' }, 
+            { status: 404 }
+          );
+        }
+        
+        return NextResponse.json(quiz);
+      } catch (quizError) {
+        console.error(`Error fetching quiz ${idParam}:`, quizError);
+        return NextResponse.json(
+          { message: '特定のクイズ取得に失敗しました', error: quizError.message }, 
+          { status: 500 }
+        );
+      }
+    }
+    
+    // ユーザーのクイズを取得
+    try {
+      const quizzes = await getQuizzes(userId);
+      console.log(`Retrieved ${quizzes.length} quizzes for user ${userId}`);
+      
+      return NextResponse.json(quizzes);
+    } catch (quizError) {
+      console.error('Error fetching quizzes:', quizError);
+      return NextResponse.json(
+        { message: 'クイズ一覧の取得に失敗しました', error: quizError.message }, 
+        { status: 500 }
+      );
+    }
   } catch (error: any) {
-    console.error('Error fetching quizzes:', error);
+    console.error('Detailed error in /api/quizzes:', error);
+    console.error('Error details:', error.stack);
     
     return NextResponse.json(
-      { message: 'クイズの取得に失敗しました', error: error.message }, 
+      { 
+        message: 'クイズの取得に失敗しました', 
+        error: error.message, 
+        stack: error.stack,
+        cause: error.cause ? String(error.cause) : 'unknown' 
+      }, 
       { status: 500 }
     );
   }
