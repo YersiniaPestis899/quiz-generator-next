@@ -2,7 +2,7 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { QuizGenerationInput } from './types';
 import { detectSpecialCategory, SPECIAL_CATEGORIES } from './specialCategories';
 
-// BedrockクライアントをシングルトンパターンでNode.js環境で初期化
+// Bedrockクライアントをシングルトンパターンでnode.js環境で初期化
 let bedrockClient: BedrockRuntimeClient | null = null;
 
 function getBedrockClient() {
@@ -19,7 +19,7 @@ function getBedrockClient() {
 }
 
 /**
- * Claude 3.7 Sonnetを使用してクイズデータを生成
+ * Claude 3.5 Sonnetを使用してクイズデータを生成
  * @param {QuizGenerationInput} input - クイズ生成入力パラメータ
  * @returns {Object} - 生成されたクイズデータ
  */
@@ -86,7 +86,7 @@ export async function generateQuizWithClaude(input: QuizGenerationInput) {
     
     return quizData;
   } catch (error) {
-    console.error('Error calling Claude 3.7 Sonnet:', error);
+    console.error('Error calling Claude 3.5 Sonnet:', error);
     throw error;
   }
 }
