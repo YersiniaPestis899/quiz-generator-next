@@ -1,0 +1,470 @@
+/* クイズゲームショーUIスタイル */
+
+/* ヘッダースタイル */
+header.gameshow-header {
+  background: linear-gradient(135deg, #1a1a2e 0%, #212140 100%);
+  position: relative;
+  overflow: hidden;
+  border-bottom: 2px solid rgba(95, 48, 226, 0.3);
+}
+
+.gameshow-header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(95, 48, 226, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
+  animation: rotate 20s linear infinite;
+  z-index: 0;
+}
+
+@keyframes rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.gameshow-title {
+  position: relative;
+  z-index: 1;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(95, 48, 226, 0.7), 0 0 20px rgba(95, 48, 226, 0.5);
+  background: linear-gradient(to right, #5f30e2, #00c2ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: pulse-title 3s ease-in-out infinite;
+}
+
+@keyframes pulse-title {
+  0%, 100% { text-shadow: 0 0 10px rgba(95, 48, 226, 0.7), 0 0 20px rgba(95, 48, 226, 0.5); }
+  50% { text-shadow: 0 0 15px rgba(95, 48, 226, 0.9), 0 0 30px rgba(95, 48, 226, 0.7); }
+}
+
+.gameshow-subtitle {
+  position: relative;
+  z-index: 1;
+  color: #ff9e00;
+  font-style: italic;
+}
+
+/* クイズ表示エリア */
+.quiz-container {
+  position: relative;
+  background: linear-gradient(145deg, #212140, #252548);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  transition: all 0.5s ease;
+}
+
+.quiz-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at center, rgba(95, 48, 226, 0.1), rgba(0, 0, 0, 0) 70%);
+  pointer-events: none;
+}
+
+/* 質問表示演出 */
+.question-spotlight {
+  position: relative;
+  overflow: hidden;
+}
+
+.question-spotlight::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(0, 194, 255, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
+  animation: spotlight-rotate 15s linear infinite;
+  z-index: 0;
+}
+
+@keyframes spotlight-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 回答選択肢のゲームショースタイル */
+.answer-option {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.answer-option::after {
+  content: '';
+  position: absolute;
+  top: -100%;
+  left: -100%;
+  width: 300%;
+  height: 300%;
+  background: radial-gradient(circle, rgba(255, 158, 0, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  z-index: -1;
+}
+
+.answer-option:hover::after {
+  opacity: 1;
+}
+
+.answer-option.selected::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(45deg, rgba(95, 48, 226, 0.2), rgba(0, 194, 255, 0.2));
+  animation: selected-pulse 2s infinite;
+  z-index: -1;
+}
+
+@keyframes selected-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
+}
+
+/* スコアディスプレイ演出 */
+.score-display.gameshow {
+  background: linear-gradient(145deg, #252548, #2a2a50);
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.score-display.gameshow::before {
+  content: '';
+  position: absolute;
+  width: 150%;
+  height: 150%;
+  background: conic-gradient(
+    from 90deg at 50% 50%,
+    rgba(95, 48, 226, 0.1) 0%,
+    rgba(0, 194, 255, 0.1) 25%,
+    rgba(255, 158, 0, 0.1) 50%,
+    rgba(95, 48, 226, 0.1) 75%,
+    rgba(0, 194, 255, 0.1) 100%
+  );
+  top: -25%;
+  left: -25%;
+  animation: rotate-bg 20s linear infinite;
+  z-index: 0;
+}
+
+@keyframes rotate-bg {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.score-percentage {
+  z-index: 1;
+  position: relative;
+  background: linear-gradient(to right, #5f30e2, #00c2ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: glow-text 3s ease-in-out infinite;
+}
+
+@keyframes glow-text {
+  0%, 100% { text-shadow: 0 0 10px rgba(95, 48, 226, 0.5); }
+  50% { text-shadow: 0 0 20px rgba(95, 48, 226, 0.8); }
+}
+
+/* 通常紙吹雪のスタイル (50%以上100%未満) */
+.confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.confetti {
+  position: absolute;
+  animation: confetti-fall 5s linear forwards;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-20px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100vh + 20px)) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+/* 正答率に応じた結果表示スタイル */
+/* パーフェクトスコア (100%) */
+.quiz-results.perfect-score {
+  background: linear-gradient(145deg, rgba(41, 25, 92, 0.9) 0%, rgba(35, 22, 81, 1) 100%);
+  border: 2px solid gold;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.3);
+  animation: perfect-glow 3s infinite alternate;
+  position: relative;
+  overflow: hidden;
+}
+
+.quiz-results.perfect-score::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+  animation: rotate 15s linear infinite;
+  z-index: 0;
+}
+
+@keyframes perfect-glow {
+  0% {
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.7), 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.perfect-badge {
+  background: linear-gradient(45deg, #FFD700, #FFC107);
+  color: #000;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 800;
+  padding: 0.5rem 2rem;
+  border-radius: 30px;
+  margin: 0 auto 1.5rem;
+  display: inline-block;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+  animation: badge-pulse 2s infinite;
+  transform: rotate(-5deg);
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: rotate(-5deg) scale(1);
+  }
+  50% {
+    transform: rotate(-5deg) scale(1.05);
+  }
+}
+
+.perfect-score-message {
+  color: gold;
+  font-size: 1.5rem;
+  text-align: center;
+  margin: 1rem 0 2rem;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  position: relative;
+  z-index: 1;
+}
+
+/* 高スコア (80%以上) */
+.quiz-results.high-score {
+  background: linear-gradient(145deg, rgba(35, 22, 81, 0.9) 0%, rgba(30, 19, 66, 1) 100%);
+  border: 2px solid #00c2ff;
+  box-shadow: 0 0 20px rgba(0, 194, 255, 0.4), 0 10px 30px rgba(0, 0, 0, 0.3);
+  animation: high-score-glow 3s infinite alternate;
+  position: relative;
+  overflow: hidden;
+}
+
+.quiz-results.high-score::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(0, 194, 255, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
+  animation: rotate 15s linear infinite;
+  z-index: 0;
+}
+
+@keyframes high-score-glow {
+  0% {
+    box-shadow: 0 0 15px rgba(0, 194, 255, 0.3), 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 25px rgba(0, 194, 255, 0.6), 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.high-score-badge {
+  background: linear-gradient(45deg, #00c2ff, #0099cc);
+  color: #fff;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  padding: 0.5rem 2rem;
+  border-radius: 30px;
+  margin: 0 auto 1.5rem;
+  display: inline-block;
+  box-shadow: 0 0 15px rgba(0, 194, 255, 0.4);
+  animation: high-badge-pulse 2s infinite;
+  transform: rotate(-3deg);
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes high-badge-pulse {
+  0%, 100% {
+    transform: rotate(-3deg) scale(1);
+  }
+  50% {
+    transform: rotate(-3deg) scale(1.03);
+  }
+}
+
+.high-score-message {
+  color: #00c2ff;
+  font-size: 1.4rem;
+  text-align: center;
+  margin: 1rem 0 2rem;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(0, 194, 255, 0.4);
+  position: relative;
+  z-index: 1;
+}
+
+/* 平均スコア (50-79%) */
+.quiz-results.average-score {
+  background: linear-gradient(145deg, rgba(30, 19, 66, 0.9) 0%, rgba(26, 17, 58, 1) 100%);
+  border: 2px solid #5f30e2;
+  box-shadow: 0 0 15px rgba(95, 48, 226, 0.3), 0 10px 30px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.quiz-results.average-score::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(95, 48, 226, 0.08) 0%, rgba(0, 0, 0, 0) 70%);
+  animation: rotate 20s linear infinite;
+  z-index: 0;
+}
+
+.average-score-message {
+  color: #5f30e2;
+  font-size: 1.3rem;
+  text-align: center;
+  margin: 1rem 0 2rem;
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(95, 48, 226, 0.3);
+  position: relative;
+  z-index: 1;
+}
+
+/* 低スコア (50%未満) */
+.quiz-results.low-score {
+  background: linear-gradient(145deg, rgba(30, 19, 66, 0.8) 0%, rgba(23, 15, 54, 0.9) 100%);
+  border: 1px solid #6C22BD;
+  box-shadow: 0 0 15px rgba(108, 34, 189, 0.2), 0 10px 30px rgba(0, 0, 0, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.quiz-results.low-score::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(108, 34, 189, 0.05) 0%, rgba(0, 0, 0, 0) 70%);
+  animation: rotate 25s linear infinite;
+  z-index: 0;
+}
+
+.low-score-message {
+  color: #8D44E0;
+  font-size: 1.3rem;
+  text-align: center;
+  margin: 1rem 0 2rem;
+  font-style: italic;
+  position: relative;
+  z-index: 1;
+}
+
+/* パーフェクト紙吹雪のスタイル */
+.perfect-confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.perfect-confetti {
+  position: absolute;
+  animation: perfect-confetti-fall 5s linear forwards;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.perfect-confetti.star {
+  animation: star-fall 6s ease-in forwards, star-rotate 3s linear infinite;
+}
+
+@keyframes perfect-confetti-fall {
+  0% {
+    transform: translateY(-20px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100vh + 20px)) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes star-fall {
+  0% {
+    transform: translateY(-50px) scale(1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100vh + 50px)) scale(0.5);
+    opacity: 0;
+  }
+}
+
+@keyframes star-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
