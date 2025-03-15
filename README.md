@@ -1,7 +1,7 @@
 # クイズジェネレーター
 
 ## 概要
-Next.js と AWS Bedrock Claude 3.7 Sonnet を活用した対話型学習クイズ生成ツールです。学習コンテンツから自動でクイズを生成し、インタラクティブなクイズ体験を提供します。
+Next.js と AWS Bedrock Claude 3.5 Sonnet を活用した対話型学習クイズ生成ツールです。学習コンテンツから自動でクイズを生成し、インタラクティブなクイズ体験を提供します。
 
 ## 主な機能
 - 教育コンテンツからの自動クイズ生成
@@ -12,7 +12,7 @@ Next.js と AWS Bedrock Claude 3.7 Sonnet を活用した対話型学習クイ�
 
 ## 技術スタック
 - **フレームワーク**: Next.js (App Router)
-- **AI**: AWS Bedrock Claude 3.7 Sonnet
+- **AI**: AWS Bedrock Claude 3.5 Sonnet
 - **データベース**: Supabase
 - **スタイリング**: Tailwind CSS
 
