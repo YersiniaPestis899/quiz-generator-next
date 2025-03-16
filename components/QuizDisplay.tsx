@@ -199,6 +199,27 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
   };
   
   /**
+   * カスタムイベントと通知メカニズムの追加
+   * クイズ保存成功時にデータ更新イベントを発行
+   */
+  const notifyQuizUpdated = () => {
+    // カスタムイベントを発行
+    if (typeof window !== 'undefined') {
+      // グローバルカスタムイベント
+      const event = new Event('quizUpdated');
+      window.dispatchEvent(event);
+      
+      // ローカルストレージを使った通知も追加（タブ間の更新用）
+      try {
+        // タイムスタンプを保存して変更を通知
+        localStorage.setItem('quizzes_updated', new Date().toISOString());
+      } catch (e) {
+        console.error('ローカルストレージ更新エラー:', e);
+      }
+    }
+  };
+  
+  /**
    * クイズを明示的に保存するハンドラー
    */
   const handleSaveQuiz = async () => {
@@ -234,6 +255,9 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
       // 成功表示
       setSaveStatus('success');
       setSaveMessage('クイズが正常に保存されました！');
+      
+      // 保存成功通知 - データ更新イベントを発行
+      notifyQuizUpdated();
       
       // 3秒後にメッセージを消す
       setTimeout(() => {
