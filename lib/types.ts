@@ -37,4 +37,14 @@ export interface Quiz {
   questions: Question[];
   created_at?: string;
   user_id?: string; // ユーザーID（認証済みまたは匿名）を追加
+  
+  // 以下、アプリケーション内で使用される追加プロパティ
+  user_answers?: Record<number, string>; // ユーザーの回答データ
+  score?: {
+    correct?: number;     // 正解数
+    total?: number;       // 総問題数
+    percentage?: number;  // 正答率
+  };
+  last_saved?: string;   // 最終保存日時
+  last_played?: string;  // 最終プレイ日時
 }
