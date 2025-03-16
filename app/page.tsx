@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import ContentUploader from '@/components/ContentUploader';
 import QuizDisplay from '@/components/QuizDisplay';
 import QuizList from '@/components/QuizList';
+import StatusNotification from '@/components/StatusNotification';
 import { Quiz } from '@/lib/types';
 
 export default function Home() {
@@ -52,6 +53,16 @@ export default function Home() {
           </div>
         </div>
       </div>
+      
+      {/* アプリケーション状態の通知コンポーネント */}
+      <StatusNotification 
+        options={{
+          supabaseCheckEnabled: true,
+          awsCheckEnabled: true,
+          autoHide: true,
+          autoHideDelay: 8000
+        }}
+      />
     </main>
   );
 }
