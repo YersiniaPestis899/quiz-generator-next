@@ -89,36 +89,58 @@ export async function saveQuiz(quiz: Quiz) {
     const userId = await getUserIdOrAnonymousId();
     console.log('クイズ保存に使用するユーザーID:', userId);
     
-    // 必須フィールドの整合性確認
-    const quizWithUserId = {
+    // 現在の時刻を取得
+    const currentTimestamp = new Date().toISOString();
+    
+    // TypeScript型定義用の完全なオブジェクト（ローカルストレージ用）
+    const fullQuizObject = {
       ...quiz,
       user_id: userId,
       // 必須フィールドが不足している場合、デフォルト値を設定
       user_answers: quiz.user_answers || {},
       score: quiz.score || {},
-      // 保存時刻を更新
-      last_saved: new Date().toISOString()
+      last_saved: currentTimestamp,
+      last_played: quiz.last_played || currentTimestamp
+    };
+    
+    // Supabaseスキーマ互換オブジェクト（既存カラムのみ）
+    const supabaseCompatibleQuiz = {
+      id: quiz.id,
+      title: quiz.title,
+      difficulty: quiz.difficulty,
+      questions: quiz.questions,
+      created_at: quiz.created_at || currentTimestamp,
+      user_id: userId
+      // スキーマに存在しないフィールドは含めない
     };
     
     console.log('Saving quiz to Supabase:', { id: quiz.id, title: quiz.title, userId });
     
     // まずローカルストレージに保存（信頼性の高いフォールバック）
     try {
-      saveQuizToLocalStorage(quizWithUserId);
+      saveQuizToLocalStorage(fullQuizObject);
       console.log('クイズをローカルストレージに保存しました:', quiz.id);
     } catch (localError) {
       console.error('ローカルストレージ保存エラー:', localError);
     }
     
     // インメモリ保存も行う（二重のフォールバック）
-    inMemoryQuizzes.push(quizWithUserId);
+    // 既存エントリを更新または新規追加
+    const existingIndex = inMemoryQuizzes.findIndex(q => q.id === quiz.id);
+    if (existingIndex >= 0) {
+      inMemoryQuizzes[existingIndex] = fullQuizObject;
+    } else {
+      inMemoryQuizzes.push(fullQuizObject);
+    }
     console.log('クイズをインメモリストレージに保存しました:', quiz.id);
     
     // Supabaseへの保存を試行
     try {
+      console.log('Supabaseに送信するデータ:', supabaseCompatibleQuiz);
+      
       const { data, error } = await supabase
         .from('quizzes')
-        .upsert([quizWithUserId], {
+        .upsert([supabaseCompatibleQuiz], {
           onConflict: 'id',
           ignoreDuplicates: false
         })
@@ -126,16 +148,34 @@ export async function saveQuiz(quiz: Quiz) {
       
       if (error) {
         console.error('Supabase保存エラー:', error);
+        
+        // エラー詳細を詳細に記録
+        if (error.details) console.error('エラー詳細:', error.details);
+        if (error.hint) console.error('ヒント:', error.hint);
+        if (error.code) console.error('エラーコード:', error.code);
+        
         // エラーはスローせず、ローカル保存されたデータを返す
-        return quizWithUserId;
+        console.log('ローカル保存したデータを返します');
+        return fullQuizObject;
       }
       
-      console.log('Supabaseにクイズを保存しました:', data);
-      return data[0] || quizWithUserId;
+      console.log('保存結果:', data[0]);
+      
+      // Supabaseからの応答がある場合はそれを返し、ローカルデータと統合
+      const mergedResult = data[0] ? {
+        ...data[0],
+        // Supabaseに存在しないがローカルに保存した情報を追加
+        user_answers: fullQuizObject.user_answers,
+        score: fullQuizObject.score,
+        last_saved: fullQuizObject.last_saved,
+        last_played: fullQuizObject.last_played
+      } : fullQuizObject;
+      
+      return mergedResult;
     } catch (supabaseError) {
       console.error('Supabase例外:', supabaseError);
       // すでにローカルとメモリに保存済みなので、そのデータを返す
-      return quizWithUserId;
+      return fullQuizObject;
     }
   } catch (error) {
     console.error('クイズ保存中の予期せぬエラー:', error);
