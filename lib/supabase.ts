@@ -196,7 +196,7 @@ export async function getQuizzes(userId?: string) {
     
     // 認証済みユーザーかどうかの判断ロジック
     const isAuthenticated = !currentUserId.startsWith('anon_');
-    console.log(`ユーザー認証状態: ${isAuthenticated ? '認証済み' : '匿名'}`)
+    console.log(`ユーザー認証状態: ${isAuthenticated ? '認証済み' : '匿名'}`);
     
     try {
       // Supabaseからクイズを取得
@@ -217,8 +217,11 @@ export async function getQuizzes(userId?: string) {
       let additionalQuizzes: Quiz[] = [];
       if (isAuthenticated && typeof window !== 'undefined') {
         try {
-          // 古い匿名IDをローカルストレージから取得
+          // 複数のソースから古い匿名IDを確認
           const oldAnonymousId = localStorage.getItem('old_anonymous_id');
+          const localStorageAnonymousId = localStorage.getItem('anonymousUserId');
+          
+          // 保存された古い匿名IDからクイズを取得
           if (oldAnonymousId && oldAnonymousId.startsWith('anon_')) {
             console.log('古い匿名IDでのクイズも取得:', oldAnonymousId);
             const { data: anonData } = await supabase
@@ -228,28 +231,82 @@ export async function getQuizzes(userId?: string) {
               
             if (anonData && anonData.length > 0) {
               console.log(`古い匿名IDから ${anonData.length} 件のクイズを取得`);
-              additionalQuizzes = anonData;
+              additionalQuizzes = [...additionalQuizzes, ...anonData];
             }
           }
+          
+          // 現在のローカルストレージのIDが匿名IDの場合も確認
+          if (localStorageAnonymousId && 
+              localStorageAnonymousId.startsWith('anon_') && 
+              localStorageAnonymousId !== currentUserId && 
+              localStorageAnonymousId !== oldAnonymousId) {
+            console.log('現在のローカルストレージの匿名IDでのクイズも取得:', localStorageAnonymousId);
+            const { data: anonData } = await supabase
+              .from('quizzes')
+              .select('*')
+              .eq('user_id', localStorageAnonymousId);
+                
+            if (anonData && anonData.length > 0) {
+              console.log(`ローカルストレージの匿名IDから ${anonData.length} 件のクイズを取得`);
+              additionalQuizzes = [...additionalQuizzes, ...anonData];
+            }
+          }
+          
+          // ローカルストレージからすべての匿名IDのクイズを検索
+          const localQuizzes = getQuizzesFromLocalStorage();
+          const anonymousIds = new Set<string>();
+          
+          // ローカルのクイズからanonで始まるユーザーIDをすべて収集
+          localQuizzes.forEach(q => {
+            if (q.user_id && 
+                q.user_id.startsWith('anon_') && 
+                q.user_id !== currentUserId && 
+                q.user_id !== oldAnonymousId && 
+                q.user_id !== localStorageAnonymousId) {
+              anonymousIds.add(q.user_id);
+            }
+          });
+          
+          // 見つかった匿名IDそれぞれについてクイズを取得
+          // Set.prototypeを使用したES5互換のforEachイテレーション
+          anonymousIds.forEach(async (anonId) => {
+            console.log('追加の匿名IDからクイズを取得:', anonId);
+            const { data: anonData } = await supabase
+              .from('quizzes')
+              .select('*')
+              .eq('user_id', anonId);
+                
+            if (anonData && anonData.length > 0) {
+              console.log(`追加の匿名IDから ${anonData.length} 件のクイズを取得`);
+              additionalQuizzes = [...additionalQuizzes, ...anonData];
+            }
+          });
         } catch (e) {
           console.error('追加クイズ取得エラー:', e);
         }
       }
       
       // ローカルストレージからも取得
-      const localQuizzes = getQuizzesFromLocalStorage()
-        .filter(q => q.user_id === currentUserId);
+      // 認証済みユーザーの場合は、すべてのクイズを取得してフィルタリング
+      const localQuizzes = isAuthenticated 
+        ? getQuizzesFromLocalStorage() 
+        : getQuizzesFromLocalStorage().filter(q => q.user_id === currentUserId);
       
       // Supabaseから取得したクイズとローカルクイズとインメモリクイズを結合
       const allQuizzes = [
         ...supabaseQuizzes, 
         ...additionalQuizzes,
         ...localQuizzes, 
-        ...inMemoryQuizzes.filter(q => q.user_id === currentUserId)
+        ...inMemoryQuizzes
       ];
       
+      // 認証済みユーザーの場合は、所有権チェックをスキップし、すべてのクイズを表示
+      const filteredQuizzes = isAuthenticated
+        ? allQuizzes // 認証済みユーザーはすべてのクイズにアクセス可能
+        : allQuizzes.filter(q => q.user_id === currentUserId); // 匿名ユーザーは自分のクイズのみ
+      
       // 重複除去（IDベース）
-      const uniqueQuizzes = allQuizzes.filter((quiz, index, self) => 
+      const uniqueQuizzes = filteredQuizzes.filter((quiz, index, self) => 
         index === self.findIndex(q => q.id === quiz.id)
       );
       
@@ -260,21 +317,22 @@ export async function getQuizzes(userId?: string) {
         return dateB.getTime() - dateA.getTime();
       });
       
-      console.log(`合計 ${uniqueQuizzes.length} 件のクイズを返却`)
+      console.log(`合計 ${uniqueQuizzes.length} 件のクイズを返却`);
       return uniqueQuizzes;
     } catch (supabaseError) {
       console.error('Error fetching from Supabase:', supabaseError);
       
       // エラー時はローカルストレージとインメモリデータのみ返す
-      const localQuizzes = getQuizzesFromLocalStorage()
-        .filter(q => q.user_id === currentUserId);
+      const localQuizzes = getQuizzesFromLocalStorage();
+      const memoryQuizzes = inMemoryQuizzes;
       
-      const memoryQuizzes = inMemoryQuizzes.filter(q => q.user_id === currentUserId);
-      
-      const allQuizzes = [...localQuizzes, ...memoryQuizzes];
+      // 認証済みユーザーの場合は、すべてのクイズを表示（所有権チェックをスキップ）
+      const filteredQuizzes = isAuthenticated
+        ? [...localQuizzes, ...memoryQuizzes]
+        : [...localQuizzes, ...memoryQuizzes].filter(q => q.user_id === currentUserId);
       
       // 重複除去（IDベース）
-      const uniqueQuizzes = allQuizzes.filter((quiz, index, self) => 
+      const uniqueQuizzes = filteredQuizzes.filter((quiz, index, self) => 
         index === self.findIndex(q => q.id === quiz.id)
       );
       
@@ -306,36 +364,38 @@ export async function getQuiz(id: string, userId?: string) {
     // ユーザーIDが指定されていない場合は現在のユーザーIDを使用
     const currentUserId = userId || await getUserIdOrAnonymousId();
     
+    // 認証済みユーザーかどうかの判断
+    const isAuthenticated = !currentUserId.startsWith('anon_');
+    
     // まずローカルストレージから検索
     const localQuizzes = getQuizzesFromLocalStorage();
     const localQuiz = localQuizzes.find(q => q.id === id);
     if (localQuiz) {
-      // 所有権チェック
-      if (localQuiz.user_id && localQuiz.user_id !== currentUserId) {
-        console.log(`Access denied: User ${currentUserId} attempted to access local quiz ${id} owned by ${localQuiz.user_id}`);
-        return null; // アクセス拒否
+      // 認証済みユーザーは所有権チェックをスキップ
+      if (isAuthenticated || localQuiz.user_id === currentUserId) {
+        return localQuiz;
       }
-      return localQuiz;
+      
+      console.log(`Access denied: User ${currentUserId} attempted to access local quiz ${id} owned by ${localQuiz.user_id}`);
+      return null; // アクセス拒否
     }
     
     // 次にインメモリストレージから検索
     const memoryQuiz = inMemoryQuizzes.find(q => q.id === id);
     if (memoryQuiz) {
-      // 所有権チェック
-      if (memoryQuiz.user_id && memoryQuiz.user_id !== currentUserId) {
-        console.log(`Access denied: User ${currentUserId} attempted to access memory quiz ${id} owned by ${memoryQuiz.user_id}`);
-        return null; // アクセス拒否
+      // 認証済みユーザーは所有権チェックをスキップ
+      if (isAuthenticated || memoryQuiz.user_id === currentUserId) {
+        return memoryQuiz;
       }
-      return memoryQuiz;
+      
+      console.log(`Access denied: User ${currentUserId} attempted to access memory quiz ${id} owned by ${memoryQuiz.user_id}`);
+      return null; // アクセス拒否
     }
     
     // 最後にSupabaseからクイズを取得
     try {
-      // 認証済みユーザーの場合、ユーザーIDに関わらず特定IDのクイズを取得（移行考慮）
-      const isAuthenticated = !currentUserId.startsWith('anon_');
-      
       const { data: quiz, error } = isAuthenticated ?
-        // 認証済みユーザーは特定IDのクイズを取得
+        // 認証済みユーザーは特定IDのクイズを取得（所有権に関わらず）
         await supabase
           .from('quizzes')
           .select('*')
