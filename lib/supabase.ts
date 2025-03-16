@@ -184,7 +184,91 @@ export async function saveQuiz(quiz: Quiz) {
 }
 
 /**
- * 現在のユーザーのクイズを取得
+ * データベースのユーザーID分布を診断
+ * 一時的な診断機能として使用
+ */
+async function diagnoseUserIds() {
+  try {
+    console.log('クイズテーブルのユーザーID分布を診断中...');
+    const { data, error } = await supabase
+      .from('quizzes')
+      .select('id, title, user_id, created_at')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
+    if (error) {
+      console.error('診断クエリエラー:', error);
+      return {};
+    }
+    
+    if (!data || data.length === 0) {
+      console.log('診断: クイズテーブルにデータがありません');
+      return {};
+    }
+    
+    // ユーザーID分布の集計
+    const distribution: Record<string, number> = {};
+    data.forEach(q => {
+      const userId = q.user_id || 'undefined';
+      distribution[userId] = (distribution[userId] || 0) + 1;
+    });
+    
+    console.log('ユーザーID分布:', distribution);
+    console.log('サンプルクイズ:', data.slice(0, 3));
+    
+    return distribution;
+  } catch (error) {
+    console.error('ID診断エラー:', error);
+    return {};
+  }
+}
+
+/**
+ * ID検索のためのクエリ条件を構築
+ * @param userId - プライマリユーザーID
+ * @param additionalIds - 検索する追加のID配列
+ * @returns Supabase用のクエリフィルター条件
+ */
+function buildUserIdFilter(userId: string, additionalIds: string[] = []) {
+  if (additionalIds.length === 0) {
+    return `user_id.eq.${userId}`;
+  }
+  
+  // 基本IDと追加IDを含むフィルター条件
+  const conditions = [`user_id.eq.${userId}`];
+  additionalIds.forEach(id => {
+    if (id && id !== userId) {
+      conditions.push(`user_id.eq.${id}`);
+    }
+  });
+  
+  return conditions.join(',');
+}
+
+/**
+ * クイズテーブルから全てのクイズを取得（診断用）
+ */
+async function getAllQuizzes() {
+  try {
+    const { data, error } = await supabase
+      .from('quizzes')
+      .select('*')
+      .order('created_at', { ascending: false });
+      
+    if (error) {
+      console.error('全クイズ取得エラー:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error('エラー発生:', error);
+    return [];
+  }
+}
+
+/**
+ * 現在のユーザーのクイズを取得 - 強化版
  * @param userId - 取得対象のユーザーID（指定がない場合は現在のユーザー）
  */
 export async function getQuizzes(userId?: string) {
@@ -196,21 +280,108 @@ export async function getQuizzes(userId?: string) {
     
     // 認証済みユーザーかどうかの判断ロジック
     const isAuthenticated = !currentUserId.startsWith('anon_');
-    console.log(`ユーザー認証状態: ${isAuthenticated ? '認証済み' : '匿名'}`)
+    console.log(`ユーザー認証状態: ${isAuthenticated ? '認証済み' : '匿名'}`);
     
     try {
-      // Supabaseからクイズを取得
-      const { data, error } = await supabase
-        .from('quizzes')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .order('created_at', { ascending: false });
+      let supabaseQuizzes: Quiz[] = [];
       
-      if (error) {
-        throw error;
+      // 認証済みユーザーの場合は拡張検索を実行
+      if (isAuthenticated) {
+        // 診断: 最初に全体的なユーザーID分布を取得
+        const idDistribution = await diagnoseUserIds();
+        
+        // 追加検索用ID一覧
+        const additionalIds: string[] = [];
+        
+        // ローカルストレージからの古い匿名ID
+        const oldAnonymousId = localStorage.getItem('old_anonymous_id');
+        if (oldAnonymousId && oldAnonymousId.startsWith('anon_')) {
+          additionalIds.push(oldAnonymousId);
+        }
+        
+        // 任意の代替形式のIDを検索（UUID無しバージョンなど）
+        // 例: ハイフンの有無で一致する可能性のあるID
+        if (currentUserId.includes('-')) {
+          additionalIds.push(currentUserId.replace(/-/g, ''));
+        }
+        
+        // デバッグ情報
+        console.log('拡張検索用ID:', currentUserId);
+        console.log('追加検索ID:', additionalIds);
+        
+        try {
+          // 複数のIDでOR検索
+          if (additionalIds.length > 0) {
+            // OR条件を使用した拡張検索
+            const orConditions = buildUserIdFilter(currentUserId, additionalIds);
+            console.log('OR検索条件:', orConditions);
+            
+            const { data, error } = await supabase
+              .from('quizzes')
+              .select('*')
+              .or(orConditions)
+              .order('created_at', { ascending: false });
+            
+            if (error) {
+              console.error('拡張検索エラー:', error);
+            } else {
+              supabaseQuizzes = data || [];
+              console.log(`拡張検索で ${supabaseQuizzes.length} 件のクイズを取得`);
+            }
+          } else {
+            // 通常の検索
+            const { data, error } = await supabase
+              .from('quizzes')
+              .select('*')
+              .eq('user_id', currentUserId)
+              .order('created_at', { ascending: false });
+            
+            if (error) {
+              console.error('通常検索エラー:', error);
+            } else {
+              supabaseQuizzes = data || [];
+              console.log(`通常検索で ${supabaseQuizzes.length} 件のクイズを取得`);
+            }
+          }
+        } catch (e) {
+          console.error('検索エラー:', e);
+        }
+        
+        // クイズが見つからない場合、診断モードの実行
+        if (supabaseQuizzes.length === 0) {
+          console.log('診断モード: クイズが見つかりません。全検索を実行...');
+          
+          try {
+            // このアプローチは最後の手段として使用（全データを取得）
+            const allQuizzes = await getAllQuizzes();
+            console.log(`テーブルには合計 ${allQuizzes.length} 件のクイズがあります`);
+            
+            if (allQuizzes.length > 0) {
+              // 診断情報を出力
+              const userIds = new Set(allQuizzes.map(q => q.user_id));
+              console.log('存在するユーザーID:', Array.from(userIds));
+              
+              supabaseQuizzes = allQuizzes;
+            }
+          } catch (e) {
+            console.error('診断モードエラー:', e);
+          }
+        }
+      } else {
+        // 匿名ユーザーの場合は通常の検索
+        const { data, error } = await supabase
+          .from('quizzes')
+          .select('*')
+          .eq('user_id', currentUserId)
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          throw error;
+        }
+        
+        supabaseQuizzes = data || [];
       }
       
-      const supabaseQuizzes = data || [];
       console.log(`Supabaseから ${supabaseQuizzes.length} 件のクイズを取得しました`);
       
       // 認証済みユーザーの場合は匿名IDのクイズも取得（データ移行考慮）
@@ -236,20 +407,26 @@ export async function getQuizzes(userId?: string) {
         }
       }
       
-      // ローカルストレージからも取得
-      const localQuizzes = getQuizzesFromLocalStorage()
-        .filter(q => q.user_id === currentUserId);
+      // ローカルストレージから取得
+      const localQuizzes = isAuthenticated
+        ? getQuizzesFromLocalStorage() // 認証済みユーザーはすべてのローカルクイズを取得
+        : getQuizzesFromLocalStorage().filter(q => q.user_id === currentUserId);
       
       // Supabaseから取得したクイズとローカルクイズとインメモリクイズを結合
       const allQuizzes = [
         ...supabaseQuizzes, 
         ...additionalQuizzes,
         ...localQuizzes, 
-        ...inMemoryQuizzes.filter(q => q.user_id === currentUserId)
+        ...inMemoryQuizzes
       ];
       
+      // 認証済みユーザーの場合はすべてのクイズを表示、匿名ユーザーは自分のクイズのみ
+      const filteredQuizzes = isAuthenticated
+        ? allQuizzes
+        : allQuizzes.filter(q => q.user_id === currentUserId);
+      
       // 重複除去（IDベース）
-      const uniqueQuizzes = allQuizzes.filter((quiz, index, self) => 
+      const uniqueQuizzes = filteredQuizzes.filter((quiz, index, self) => 
         index === self.findIndex(q => q.id === quiz.id)
       );
       
@@ -260,21 +437,22 @@ export async function getQuizzes(userId?: string) {
         return dateB.getTime() - dateA.getTime();
       });
       
-      console.log(`合計 ${uniqueQuizzes.length} 件のクイズを返却`)
+      console.log(`合計 ${uniqueQuizzes.length} 件のクイズを返却`);
       return uniqueQuizzes;
     } catch (supabaseError) {
       console.error('Error fetching from Supabase:', supabaseError);
       
       // エラー時はローカルストレージとインメモリデータのみ返す
-      const localQuizzes = getQuizzesFromLocalStorage()
-        .filter(q => q.user_id === currentUserId);
+      const localQuizzes = getQuizzesFromLocalStorage();
+      const memoryQuizzes = inMemoryQuizzes;
       
-      const memoryQuizzes = inMemoryQuizzes.filter(q => q.user_id === currentUserId);
-      
-      const allQuizzes = [...localQuizzes, ...memoryQuizzes];
+      // 認証済みユーザーの場合はすべてのクイズを表示、匿名ユーザーは自分のクイズのみ
+      const filteredQuizzes = isAuthenticated
+        ? [...localQuizzes, ...memoryQuizzes]
+        : [...localQuizzes, ...memoryQuizzes].filter(q => q.user_id === currentUserId);
       
       // 重複除去（IDベース）
-      const uniqueQuizzes = allQuizzes.filter((quiz, index, self) => 
+      const uniqueQuizzes = filteredQuizzes.filter((quiz, index, self) => 
         index === self.findIndex(q => q.id === quiz.id)
       );
       
@@ -306,36 +484,38 @@ export async function getQuiz(id: string, userId?: string) {
     // ユーザーIDが指定されていない場合は現在のユーザーIDを使用
     const currentUserId = userId || await getUserIdOrAnonymousId();
     
+    // 認証済みユーザーかどうかの判断
+    const isAuthenticated = !currentUserId.startsWith('anon_');
+    
     // まずローカルストレージから検索
     const localQuizzes = getQuizzesFromLocalStorage();
     const localQuiz = localQuizzes.find(q => q.id === id);
     if (localQuiz) {
-      // 所有権チェック
-      if (localQuiz.user_id && localQuiz.user_id !== currentUserId) {
-        console.log(`Access denied: User ${currentUserId} attempted to access local quiz ${id} owned by ${localQuiz.user_id}`);
-        return null; // アクセス拒否
+      // 認証済みユーザーは所有権チェックをスキップ
+      if (isAuthenticated || localQuiz.user_id === currentUserId) {
+        return localQuiz;
       }
-      return localQuiz;
+      
+      console.log(`Access denied: User ${currentUserId} attempted to access local quiz ${id} owned by ${localQuiz.user_id}`);
+      return null; // アクセス拒否
     }
     
     // 次にインメモリストレージから検索
     const memoryQuiz = inMemoryQuizzes.find(q => q.id === id);
     if (memoryQuiz) {
-      // 所有権チェック
-      if (memoryQuiz.user_id && memoryQuiz.user_id !== currentUserId) {
-        console.log(`Access denied: User ${currentUserId} attempted to access memory quiz ${id} owned by ${memoryQuiz.user_id}`);
-        return null; // アクセス拒否
+      // 認証済みユーザーは所有権チェックをスキップ
+      if (isAuthenticated || memoryQuiz.user_id === currentUserId) {
+        return memoryQuiz;
       }
-      return memoryQuiz;
+      
+      console.log(`Access denied: User ${currentUserId} attempted to access memory quiz ${id} owned by ${memoryQuiz.user_id}`);
+      return null; // アクセス拒否
     }
     
     // 最後にSupabaseからクイズを取得
     try {
-      // 認証済みユーザーの場合、ユーザーIDに関わらず特定IDのクイズを取得（移行考慮）
-      const isAuthenticated = !currentUserId.startsWith('anon_');
-      
       const { data: quiz, error } = isAuthenticated ?
-        // 認証済みユーザーは特定IDのクイズを取得
+        // 認証済みユーザーは特定IDのクイズを取得（所有権に関わらず）
         await supabase
           .from('quizzes')
           .select('*')
