@@ -50,9 +50,16 @@ function getStoredOrNewAnonymousId(): string {
   if (typeof window !== 'undefined') {
     try {
       const storedId = localStorage.getItem('anonymousUserId');
-      if (storedId && storedId.startsWith('anon_')) {
-        console.log('ローカルストレージから匿名IDを取得:', storedId);
-        return storedId;
+      if (storedId) {
+        // UUID形式のIDも有効なユーザーIDとして扱う
+        if (isUUID(storedId)) {
+          console.log('UUID形式のIDをローカルストレージから取得:', storedId);
+          return storedId;
+        } else if (storedId.startsWith('anon_')) {
+          console.log('ローカルストレージから匿名IDを取得:', storedId);
+          return storedId;
+        }
+        // その他の形式のIDは無効として扱い、新しいIDを生成
       }
     } catch (e) {
       console.error('ローカルストレージアクセスエラー:', e);
@@ -60,6 +67,16 @@ function getStoredOrNewAnonymousId(): string {
   }
   
   return generateAnonymousId();
+}
+
+/**
+ * ID文字列がUUID形式かどうかをチェック
+ * @param id チェックするID
+ * @returns UUIDならtrue、そうでなければfalse
+ */
+function isUUID(id: string): boolean {
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidPattern.test(id);
 }
 
 /**
@@ -84,7 +101,20 @@ export async function getUserIdOrAnonymousId(): Promise<string> {
       return userId;
     }
     
-    // 2. 認証がない場合は匿名ID（ローカルストレージベース）を使用
+    // 2. ローカルストレージに保存されたUUID形式のIDをチェック
+    if (typeof window !== 'undefined') {
+      try {
+        const storedId = localStorage.getItem('anonymousUserId');
+        if (storedId && isUUID(storedId)) {
+          console.log('ローカルストレージからUUID形式のIDを検出 (認証済みと推定):', storedId);
+          return storedId;
+        }
+      } catch (e) {
+        console.error('ローカルストレージアクセスエラー:', e);
+      }
+    }
+    
+    // 3. 認証がない場合は匿名ID（ローカルストレージベース）を使用
     console.log('認証セッションが存在しません。匿名IDを使用します。');
     return getStoredOrNewAnonymousId();
   } catch (error) {
@@ -103,8 +133,17 @@ export function getAnonymousIdFromRequest(requestUrl: string): string | null {
     const url = new URL(requestUrl);
     const anonymousId = url.searchParams.get('anonymousId');
     
-    if (anonymousId && (anonymousId.startsWith('anon_') || anonymousId.length > 20)) {
-      return anonymousId;
+    if (anonymousId) {
+      // UUIDパターンのIDを検出した場合
+      if (isUUID(anonymousId)) {
+        console.log('リクエストからUUID形式のIDを検出:', anonymousId);
+        return anonymousId;
+      }
+      // 匿名IDパターンを検出した場合
+      else if (anonymousId.startsWith('anon_')) {
+        console.log('リクエストから匿名IDを検出:', anonymousId);
+        return anonymousId;
+      }
     }
     
     return null;
@@ -122,6 +161,13 @@ export function clearAnonymousId(): void {
   console.log('匿名IDクリア処理を実行中...');
   if (typeof window !== 'undefined') {
     try {
+      // 現在のIDを一時保存（データ移行のため）
+      const currentId = localStorage.getItem('anonymousUserId');
+      if (currentId && currentId.startsWith('anon_')) {
+        localStorage.setItem('old_anonymous_id', currentId);
+        console.log('古い匿名IDを保存:', currentId);
+      }
+      
       localStorage.removeItem('anonymousUserId');
       console.log('ローカルストレージから匿名IDを削除しました');
     } catch (error) {
