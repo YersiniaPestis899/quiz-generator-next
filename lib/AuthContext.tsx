@@ -39,6 +39,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('有効なセッションを検出:', session.user.id);
           setSession(session);
           setUser(session.user);
+          
+          // 認証済みユーザーの場合、現在の匿名IDを確認して保存
+          if (typeof window !== 'undefined') {
+            try {
+              const currentId = localStorage.getItem('anonymousUserId');
+              if (currentId && currentId.startsWith('anon_') && 
+                  currentId !== session.user.id) {
+                localStorage.setItem('old_anonymous_id', currentId);
+                console.log('認証検出時に旧匿名IDを保存:', currentId);
+                // 現在のIDを認証済みIDに更新
+                localStorage.setItem('anonymousUserId', session.user.id);
+                console.log('現在のIDを認証済みIDに更新:', session.user.id);
+              }
+            } catch (e) {
+              console.error('ローカルストレージアクセスエラー:', e);
+            }
+          }
         } else {
           console.log('アクティブな認証セッションがありません');
           setSession(null);
@@ -54,15 +71,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               console.log('新しい認証セッション:', session.user.id);
               setSession(session);
               setUser(session.user);
+              
+              // 認証状態変更時のアクション
+              if (event === 'SIGNED_IN') {
+                console.log('サインイン検出: ユーザーデータ同期を準備');
+                
+                // 匿名IDを保存（データ移行用）
+                if (typeof window !== 'undefined') {
+                  try {
+                    const currentId = localStorage.getItem('anonymousUserId');
+                    if (currentId && currentId.startsWith('anon_') && 
+                        currentId !== session.user.id) {
+                      localStorage.setItem('old_anonymous_id', currentId);
+                      console.log('サインイン時に旧匿名IDを保存:', currentId);
+                      
+                      // 現在のIDを認証済みIDに更新
+                      localStorage.setItem('anonymousUserId', session.user.id);
+                      console.log('現在のIDを認証済みIDに更新:', session.user.id);
+                    }
+                  } catch (e) {
+                    console.error('ローカルストレージアクセスエラー:', e);
+                  }
+                }
+              }
             } else {
               console.log('認証セッションが終了');
               setSession(null);
               setUser(null);
-            }
-            
-            // セッション変更時の特別なアクション
-            if (event === 'SIGNED_IN') {
-              console.log('サインイン検出: ユーザーデータ同期を準備');
             }
             
             if (event === 'SIGNED_OUT') {
@@ -93,6 +128,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Google認証でのサインイン
   const signInWithGoogle = async () => {
     try {
+      // サインイン前に現在の匿名IDを保存
+      if (typeof window !== 'undefined') {
+        try {
+          const currentId = localStorage.getItem('anonymousUserId');
+          if (currentId && currentId.startsWith('anon_')) {
+            localStorage.setItem('old_anonymous_id', currentId);
+            console.log('サインイン開始前に旧匿名IDを保存:', currentId);
+          }
+        } catch (e) {
+          console.error('ローカルストレージアクセスエラー:', e);
+        }
+      }
+      
       console.log('Google認証開始...');
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -117,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       console.log('サインアウト処理開始...');
+      
       // サインアウト前に匿名IDをクリア
       clearAnonymousId();
       
