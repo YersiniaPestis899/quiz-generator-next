@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { Session, User } from '@supabase/supabase-js';
+import { clearAnonymousId } from './auth';
 
 type AuthContextType = {
   session: Session | null;
@@ -36,10 +37,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // リアルタイムセッション監視を設定
       const { data: { subscription } } = await supabase.auth.onAuthStateChange(
-        (_event, session) => {
+        (event, session) => {
+          console.log('認証状態変更イベント:', event);
           setSession(session);
           setUser(session?.user ?? null);
           setIsLoading(false);
+          
+          // サインアウト時に匿名IDをクリア
+          if (event === 'SIGNED_OUT') {
+            clearAnonymousId();
+          }
         }
       );
       

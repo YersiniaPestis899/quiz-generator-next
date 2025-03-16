@@ -1,9 +1,13 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import AuthButton from './AuthButton';
+import { useAuth } from '@/lib/AuthContext';
 
 export default function GameshowHeader() {
+  const { user, isLoading } = useAuth();
+  
   return (
     <header className="gameshow-header py-6 mb-8">
       <div className="container mx-auto px-4">
@@ -21,7 +25,15 @@ export default function GameshowHeader() {
             <p className="gameshow-subtitle">Powered by Claude 3.7 Sonnet</p>
           </a>
           
-          <div className="auth-container">
+          <div className="auth-container flex items-center gap-4">
+            {!user && !isLoading && (
+              <Link 
+                href="/auth" 
+                className="text-sm text-text-secondary hover:text-text-accent transition-colors"
+              >
+                ログイン / 認証ページ
+              </Link>
+            )}
             <AuthButton />
           </div>
         </div>

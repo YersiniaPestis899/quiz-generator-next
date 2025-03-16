@@ -35,3 +35,20 @@ export function getUserIdFromCookie(): string | null {
     return null;
   }
 }
+
+/**
+ * ユーザーIDのクッキーを削除
+ * ログアウト時やセッション切り替え時に呼び出し
+ */
+export function clearUserIdCookie(): void {
+  if (typeof document === 'undefined') return;
+  
+  try {
+    // 過去の日付を設定してクッキーを削除
+    document.cookie = `${USER_ID_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
+    
+    console.log('ユーザーIDのクッキーを削除しました');
+  } catch (error) {
+    console.error('クッキーの削除に失敗しました:', error);
+  }
+}

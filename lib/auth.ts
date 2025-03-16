@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { getUserIdFromCookie, saveUserIdToCookie } from './cookieUtils';
+import { getUserIdFromCookie, saveUserIdToCookie, clearUserIdCookie } from './cookieUtils';
 
 /**
  * 現在のセッションのユーザーIDを取得
@@ -24,11 +24,27 @@ export async function getCurrentUserId() {
  * セッションのユーザーID、または匿名ユーザー識別子を取得
  * 認証していない場合はクッキーやローカルストレージに保存されたID、
  * またはランダムIDを生成して返す
- * ユーザー識別の優先順位: クッキー > 認証済みセッション > ローカルストレージ > 新規生成
+ * ユーザー識別の優先順位: 認証済みセッション > クッキー > ローカルストレージ > 新規生成
  */
 export async function getUserIdOrAnonymousId() {
   try {
-    // まずクッキーを確認（最優先）
+    // まず認証済みセッションを確認（最優先）
+    const userId = await getCurrentUserId();
+    if (userId) {
+      console.log('認証セッションからユーザーIDを取得:', userId);
+      // 認証済みIDをクッキーとローカルストレージに保存して同期
+      saveUserIdToCookie(userId);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('anonymousUserId', userId);
+        } catch (e) {
+          console.error('ローカルストレージへの保存に失敗:', e);
+        }
+      }
+      return userId;
+    }
+    
+    // 次にクッキーを確認
     const cookieUserId = getUserIdFromCookie();
     if (cookieUserId) {
       console.log('クッキーからユーザーIDを取得:', cookieUserId);
@@ -41,22 +57,6 @@ export async function getUserIdOrAnonymousId() {
         }
       }
       return cookieUserId;
-    }
-    
-    // 次に認証済みセッションを確認
-    const userId = await getCurrentUserId();
-    if (userId) {
-      console.log('認証セッションからユーザーIDを取得:', userId);
-      // 認証済みIDもクッキーとローカルストレージに保存
-      saveUserIdToCookie(userId);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('anonymousUserId', userId);
-        } catch (e) {
-          console.error('ローカルストレージへの保存に失敗:', e);
-        }
-      }
-      return userId;
     }
     
     // 次にローカルストレージを確認
@@ -113,5 +113,21 @@ export function getAnonymousIdFromRequest(requestUrl: string) {
   } catch (error) {
     console.error('Error parsing request URL:', error);
     return null;
+  }
+}
+
+/**
+ * 匿名ユーザーIDをクリア
+ * ログイン後やログアウト時に呼び出す
+ */
+export function clearAnonymousId() {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('anonymousUserId');
+    }
+    clearUserIdCookie();
+    console.log('匿名IDをクリアしました');
+  } catch (error) {
+    console.error('匿名IDのクリアに失敗しました:', error);
   }
 }
