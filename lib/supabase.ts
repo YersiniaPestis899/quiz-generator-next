@@ -80,12 +80,14 @@ if (typeof window !== 'undefined') {
 
 /**
  * クイズオブジェクトをSupabaseに保存
+ * 複数の保存先を使用した堅牢な保存処理を実装
  * @param quiz - 保存するクイズオブジェクト
  */
 export async function saveQuiz(quiz: Quiz) {
   try {
-    // ユーザーIDを取得
+    // ユーザーIDを取得（改善された方法）
     const userId = await getUserIdOrAnonymousId();
+    console.log('クイズ保存に使用するユーザーID:', userId);
     
     // クイズオブジェクトにユーザーIDを追加
     const quizWithUserId = {
@@ -93,40 +95,44 @@ export async function saveQuiz(quiz: Quiz) {
       user_id: userId
     };
     
-    console.log('Saving quiz to Supabase:', { id: quiz.id, title: quiz.title });
+    console.log('Saving quiz to Supabase:', { id: quiz.id, title: quiz.title, userId });
     
-    // まずローカルストレージに保存（フォールバックとして）
-    saveQuizToLocalStorage(quizWithUserId);
-    
-    const { data, error } = await supabase
-      .from('quizzes')
-      .insert([quizWithUserId])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error saving quiz to Supabase:', error);
-      
-      // エラー発生時はインメモリストレージに保存
-      inMemoryQuizzes.push(quizWithUserId);
-      console.log('Saved quiz to in-memory storage as fallback');
-      
-      // UIにはエラーを表示せずクイズデータを返す
-      return quizWithUserId;
+    // まずローカルストレージに保存（信頼性の高いフォールバック）
+    try {
+      saveQuizToLocalStorage(quizWithUserId);
+      console.log('クイズをローカルストレージに保存しました:', quiz.id);
+    } catch (localError) {
+      console.error('ローカルストレージ保存エラー:', localError);
     }
     
-    console.log('Quiz saved successfully to Supabase:', data);
-    return data;
+    // インメモリ保存も行う（二重のフォールバック）
+    inMemoryQuizzes.push(quizWithUserId);
+    console.log('クイズをインメモリストレージに保存しました:', quiz.id);
+    
+    // Supabaseへの保存を試行
+    try {
+      const { data, error } = await supabase
+        .from('quizzes')
+        .insert([quizWithUserId])
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Supabase保存エラー:', error);
+        // エラーはスローせず、ローカル保存されたデータを返す
+        return quizWithUserId;
+      }
+      
+      console.log('Supabaseにクイズを保存しました:', data);
+      return data;
+    } catch (supabaseError) {
+      console.error('Supabase例外:', supabaseError);
+      // すでにローカルとメモリに保存済みなので、そのデータを返す
+      return quizWithUserId;
+    }
   } catch (error) {
-    console.error('Exception saving quiz:', error);
-    
-    // 例外発生時もインメモリストレージに保存
-    inMemoryQuizzes.push({
-      ...quiz,
-      user_id: await getUserIdOrAnonymousId()
-    });
-    
-    return quiz;
+    console.error('クイズ保存中の予期せぬエラー:', error);
+    return quiz; // 最低限元のクイズデータは返す
   }
 }
 
