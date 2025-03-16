@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Quiz } from '@/lib/types';
+import { saveQuiz } from '@/lib/supabase';
 
 interface QuizDisplayProps {
   quiz: Quiz;
@@ -23,6 +24,9 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
   const [isCountingDown, setIsCountingDown] = useState(false); // カウントダウン進行中フラグ
   const [isPreparationPhase, setIsPreparationPhase] = useState(false); // 準備フェーズフラグ
   const [answerTimeLeft, setAnswerTimeLeft] = useState<number | null>(null); // 回答時間制限
+  const [isSaving, setIsSaving] = useState(false); // 保存中フラグ
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle'); // 保存状態
+  const [saveMessage, setSaveMessage] = useState<string>(''); // 保存メッセージ
   
   // クイズデータが無効な場合のフォールバック表示
   if (!quiz || !quiz.questions || quiz.questions.length === 0) {
@@ -103,6 +107,8 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
     setCurrentQuestion(0);
     setSelectedAnswers({});
     setShowResults(false);
+    setSaveStatus('idle');
+    setSaveMessage('');
     
     // カウントダウン関連のリセット
     setCountdown(null);
@@ -190,6 +196,65 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
     setCountdown(3);
     setIsPreparationPhase(true);
     setIsCountingDown(true);
+  };
+  
+  /**
+   * クイズを明示的に保存するハンドラー
+   */
+  const handleSaveQuiz = async () => {
+    try {
+      // 保存中状態を設定
+      setIsSaving(true);
+      setSaveStatus('saving');
+      setSaveMessage('クイズを保存中...');
+      
+      console.log('保存処理を開始します。クイズID:', quiz.id);
+      
+      // クイズにスコア情報を付加
+      const score = calculateScore();
+      const scorePercentage = Math.round((score / quiz.questions.length) * 100);
+      
+      // 回答情報を含むクイズデータを作成
+      const quizWithAnswers = {
+        ...quiz,
+        user_answers: selectedAnswers,
+        score: {
+          correct: score,
+          total: quiz.questions.length,
+          percentage: scorePercentage
+        },
+        last_played: new Date().toISOString()
+      };
+      
+      // Supabaseに保存
+      const result = await saveQuiz(quizWithAnswers);
+      
+      console.log('保存結果:', result);
+      
+      // 成功表示
+      setSaveStatus('success');
+      setSaveMessage('クイズが正常に保存されました！');
+      
+      // 3秒後にメッセージを消す
+      setTimeout(() => {
+        setSaveStatus('idle');
+        setSaveMessage('');
+      }, 3000);
+    } catch (error) {
+      console.error('クイズ保存エラー:', error);
+      
+      // エラー表示
+      setSaveStatus('error');
+      setSaveMessage('保存中にエラーが発生しました。再試行してください。');
+      
+      // 5秒後にメッセージを消す
+      setTimeout(() => {
+        setSaveStatus('idle');
+        setSaveMessage('');
+      }, 5000);
+    } finally {
+      setIsSaving(false);
+    }
   };
   
   // 結果表示モードの場合
@@ -306,6 +371,22 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
           </div>
           
           {scoreMessage}
+          
+          {/* 保存状態表示エリア */}
+          {saveStatus !== 'idle' && (
+            <div className={`save-status-message ${saveStatus}`}>
+              {saveMessage}
+            </div>
+          )}
+          
+          {/* 保存ボタン */}
+          <button 
+            className={`btn-accent w-full mt-4 mb-4 ${isSaving ? 'opacity-50' : ''}`} 
+            onClick={handleSaveQuiz}
+            disabled={isSaving}
+          >
+            {isSaving ? '保存中...' : '結果を保存する'}
+          </button>
         
           <div className="questions-review">
             {quiz.questions.map((q, idx) => {
