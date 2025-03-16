@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getQuizzes, getQuiz, addUserIdColumnIfNeeded } from '@/lib/supabase';
 import { getUserIdOrAnonymousId } from '@/lib/auth';
 
-// これは実際の実装です - Supabaseからデータを取得
-
 /**
  * GET /api/quizzes
  * ユーザー別クイズ取得API
@@ -15,8 +13,15 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const idParam = url.searchParams.get('id');
     const anonymousId = url.searchParams.get('anonymousId');
+    const isAuthenticated = url.searchParams.get('isAuthenticated') === 'true';
+    const getAllQuizzes = url.searchParams.get('getAllQuizzes') === 'true';
     
-    console.log('API Request parameters:', { idParam, anonymousId });
+    console.log('API Request parameters:', { 
+      idParam, 
+      anonymousId, 
+      isAuthenticated, 
+      getAllQuizzes
+    });
 
     // データベースカラム構造を確認
     console.log('API: Checking database column structure...');
@@ -25,8 +30,43 @@ export async function GET(request: NextRequest) {
 
     // 現在のユーザーIDを取得
     console.log('API: Getting user ID...');
-    const userId = anonymousId || await getUserIdOrAnonymousId();
+    let userId = anonymousId || await getUserIdOrAnonymousId();
     console.log('User ID for query:', userId);
+    
+    // UUIDパターンを検出する正規表現
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const isUuidUser = uuidPattern.test(userId);
+    
+    if (isUuidUser) {
+      console.log('API: UUID形式のユーザーIDを検出 - 特別な処理を適用');
+    }
+    
+    // 特殊モード: 認証済みユーザーまたは全クイズ要求の場合
+    if (getAllQuizzes || isUuidUser) {
+      console.log('API: 全クイズ取得モードを実行');
+      try {
+        // 直接Supabaseから全クイズを取得
+        const { data, error } = await supabase
+          .from('quizzes')
+          .select('*')
+          .order('created_at', { ascending: false });
+          
+        if (error) {
+          console.error('API: 全クイズ取得エラー:', error);
+          return NextResponse.json(
+            { message: '全クイズの取得に失敗しました', error: error.message }, 
+            { status: 500 }
+          );
+        }
+        
+        console.log(`API: 全クイズモード - ${data?.length || 0}件のクイズを取得`);
+        return NextResponse.json(data || []);
+      } catch (error) {
+        console.error('API: 全クイズ取得中のエラー:', error);
+        // エラー時は通常モードにフォールバック
+        console.log('API: 通常モードにフォールバックします');
+      }
+    }
     
     // IDが指定されている場合は特定のクイズを取得
     if (idParam) {
@@ -55,8 +95,9 @@ export async function GET(request: NextRequest) {
     
     // ユーザーのクイズを取得
     try {
+      console.log(`API: クイズ取得を実行 - userId=${userId}`);
       const quizzes = await getQuizzes(userId);
-      console.log(`Retrieved ${quizzes.length} quizzes for user ${userId}`);
+      console.log(`API: ${quizzes.length} 件のクイズを取得しました`);
       
       return NextResponse.json(quizzes);
     } catch (quizError) {
