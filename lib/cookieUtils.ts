@@ -9,10 +9,10 @@ export function saveUserIdToCookie(userId: string): void {
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + COOKIE_EXPIRY_DAYS);
     
-    // クッキーを設定
-    document.cookie = `${USER_ID_COOKIE_NAME}=${userId}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Strict${location.protocol === 'https:' ? '; Secure' : ''}`;
+    // クッキー設定を最適化（SameSite=Laxに変更し、より良い互換性を確保）
+    document.cookie = `${USER_ID_COOKIE_NAME}=${userId}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
     
-    console.log('ユーザーIDをクッキーに保存しました');
+    console.log('ユーザーIDをクッキーに保存しました:', userId);
   } catch (error) {
     console.error('クッキーへの保存に失敗しました:', error);
   }
