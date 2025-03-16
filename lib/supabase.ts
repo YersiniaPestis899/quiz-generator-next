@@ -184,6 +184,16 @@ export async function saveQuiz(quiz: Quiz) {
 }
 
 /**
+ * ID文字列がUUID形式かどうかをチェック
+ * @param id チェックするID
+ * @returns UUIDならtrue、そうでなければfalse
+ */
+function isUUID(id: string): boolean {
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidPattern.test(id);
+}
+
+/**
  * 現在のユーザーのクイズを取得
  * @param userId - 取得対象のユーザーID（指定がない場合は現在のユーザー）
  */
@@ -194,12 +204,64 @@ export async function getQuizzes(userId?: string) {
     
     console.log('Fetching quizzes for user:', currentUserId);
     
-    // 認証済みユーザーかどうかの判断ロジック
-    const isAuthenticated = !currentUserId.startsWith('anon_');
-    console.log(`ユーザー認証状態: ${isAuthenticated ? '認証済み' : '匿名'}`)
+    // 認証済みユーザーかどうかの判断ロジック - UUID形式のユーザーIDも認証済みと判断
+    const isAuthenticated = !currentUserId.startsWith('anon_') || isUUID(currentUserId);
+    console.log(`ユーザー認証状態: ${isAuthenticated ? '認証済み' : '匿名'} (ID形式: ${isUUID(currentUserId) ? 'UUID' : '非UUID'})`)
     
     try {
-      // Supabaseからクイズを取得
+      // Supabaseからクイズを取得（詳細なログ出力）
+      console.log(`Supabaseクエリ実行: user_id=${currentUserId}`);
+      
+      if (isAuthenticated) {
+        // 認証済みユーザー（UUIDを含む）の場合は、すべてのクイズを取得
+        console.log('認証済みユーザーは全クイズ取得可能モード');
+        
+        try {
+          // 全クイズを取得するクエリ
+          const { data, error } = await supabase
+            .from('quizzes')
+            .select('*')
+            .order('created_at', { ascending: false });
+            
+          if (error) {
+            console.error('全クイズ取得エラー:', error);
+            throw error;
+          }
+          
+          const allQuizzes = data || [];
+          console.log(`SupabaseのDB全体から ${allQuizzes.length} 件のクイズを取得しました`);
+          
+          // ローカルストレージとメモリデータも取得して結合
+          const localQuizzes = getQuizzesFromLocalStorage();
+          
+          // すべてのクイズを結合
+          const combinedQuizzes = [
+            ...allQuizzes,
+            ...localQuizzes,
+            ...inMemoryQuizzes
+          ];
+          
+          // 重複除去
+          const uniqueQuizzes = combinedQuizzes.filter((quiz, index, self) => 
+            index === self.findIndex(q => q.id === quiz.id)
+          );
+          
+          // 日付でソート
+          uniqueQuizzes.sort((a, b) => {
+            const dateA = new Date(a.created_at || 0);
+            const dateB = new Date(b.created_at || 0);
+            return dateB.getTime() - dateA.getTime();
+          });
+          
+          console.log(`認証済みユーザー用: 合計 ${uniqueQuizzes.length} 件のクイズを返却`);
+          return uniqueQuizzes;
+        } catch (error) {
+          console.error('認証済みモードでのクイズ取得エラー:', error);
+          // エラー時は通常モードにフォールバック
+        }
+      }
+      
+      // 通常モード（またはフォールバックケース）：ユーザーIDに基づいて取得
       const { data, error } = await supabase
         .from('quizzes')
         .select('*')
@@ -207,6 +269,10 @@ export async function getQuizzes(userId?: string) {
         .order('created_at', { ascending: false });
       
       if (error) {
+        console.error('Supabaseクエリエラー詳細:', error);
+        if (error.details) console.error('- 詳細:', error.details);
+        if (error.hint) console.error('- ヒント:', error.hint);
+        if (error.code) console.error('- コード:', error.code);
         throw error;
       }
       
@@ -238,14 +304,14 @@ export async function getQuizzes(userId?: string) {
       
       // ローカルストレージからも取得
       const localQuizzes = getQuizzesFromLocalStorage()
-        .filter(q => q.user_id === currentUserId);
+        .filter(q => isAuthenticated || q.user_id === currentUserId);
       
       // Supabaseから取得したクイズとローカルクイズとインメモリクイズを結合
       const allQuizzes = [
         ...supabaseQuizzes, 
         ...additionalQuizzes,
         ...localQuizzes, 
-        ...inMemoryQuizzes.filter(q => q.user_id === currentUserId)
+        ...inMemoryQuizzes.filter(q => isAuthenticated || q.user_id === currentUserId)
       ];
       
       // 重複除去（IDベース）
@@ -260,16 +326,16 @@ export async function getQuizzes(userId?: string) {
         return dateB.getTime() - dateA.getTime();
       });
       
-      console.log(`合計 ${uniqueQuizzes.length} 件のクイズを返却`)
+      console.log(`通常モード: 合計 ${uniqueQuizzes.length} 件のクイズを返却`)
       return uniqueQuizzes;
     } catch (supabaseError) {
       console.error('Error fetching from Supabase:', supabaseError);
       
       // エラー時はローカルストレージとインメモリデータのみ返す
       const localQuizzes = getQuizzesFromLocalStorage()
-        .filter(q => q.user_id === currentUserId);
+        .filter(q => isAuthenticated || q.user_id === currentUserId);
       
-      const memoryQuizzes = inMemoryQuizzes.filter(q => q.user_id === currentUserId);
+      const memoryQuizzes = inMemoryQuizzes.filter(q => isAuthenticated || q.user_id === currentUserId);
       
       const allQuizzes = [...localQuizzes, ...memoryQuizzes];
       
@@ -285,6 +351,7 @@ export async function getQuizzes(userId?: string) {
         return dateB.getTime() - dateA.getTime();
       });
       
+      console.log(`エラー時フォールバック: ${uniqueQuizzes.length} 件のクイズを返却`);
       return uniqueQuizzes;
     }
   } catch (error) {
@@ -292,6 +359,7 @@ export async function getQuizzes(userId?: string) {
     
     // 最悪の場合もローカルストレージとインメモリデータを返す
     const localQuizzes = getQuizzesFromLocalStorage();
+    console.log(`致命的エラー時: ローカルストレージとメモリのみのクイズ ${localQuizzes.length + inMemoryQuizzes.length} 件を返却`);
     return [...localQuizzes, ...inMemoryQuizzes];
   }
 }
@@ -310,7 +378,12 @@ export async function getQuiz(id: string, userId?: string) {
     const localQuizzes = getQuizzesFromLocalStorage();
     const localQuiz = localQuizzes.find(q => q.id === id);
     if (localQuiz) {
-      // 所有権チェック
+      // UUIDユーザーは常にアクセス可能
+      if (isUUID(currentUserId)) {
+        return localQuiz;
+      }
+      
+      // それ以外は所有権チェック
       if (localQuiz.user_id && localQuiz.user_id !== currentUserId) {
         console.log(`Access denied: User ${currentUserId} attempted to access local quiz ${id} owned by ${localQuiz.user_id}`);
         return null; // アクセス拒否
@@ -321,7 +394,12 @@ export async function getQuiz(id: string, userId?: string) {
     // 次にインメモリストレージから検索
     const memoryQuiz = inMemoryQuizzes.find(q => q.id === id);
     if (memoryQuiz) {
-      // 所有権チェック
+      // UUIDユーザーは常にアクセス可能
+      if (isUUID(currentUserId)) {
+        return memoryQuiz;
+      }
+      
+      // それ以外は所有権チェック
       if (memoryQuiz.user_id && memoryQuiz.user_id !== currentUserId) {
         console.log(`Access denied: User ${currentUserId} attempted to access memory quiz ${id} owned by ${memoryQuiz.user_id}`);
         return null; // アクセス拒否
@@ -332,7 +410,7 @@ export async function getQuiz(id: string, userId?: string) {
     // 最後にSupabaseからクイズを取得
     try {
       // 認証済みユーザーの場合、ユーザーIDに関わらず特定IDのクイズを取得（移行考慮）
-      const isAuthenticated = !currentUserId.startsWith('anon_');
+      const isAuthenticated = !currentUserId.startsWith('anon_') || isUUID(currentUserId);
       
       const { data: quiz, error } = isAuthenticated ?
         // 認証済みユーザーは特定IDのクイズを取得
