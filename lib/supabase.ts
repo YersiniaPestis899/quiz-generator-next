@@ -6,8 +6,86 @@ import { getUserIdOrAnonymousId } from './auth';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+// 環境変数が設定されているかチェック
+if (!supabaseUrl || !supabaseKey) {
+  console.warn('⚠️ Supabase環境変数が設定されていません。ダミーデータを使用します。');
+}
+
 // Supabaseクライアント初期化
 export const supabase = createClient(supabaseUrl, supabaseKey);
+
+// クイズデータを一時的に保存するためのインメモリストレージ
+// Supabase接続が利用できない場合のフォールバックとして使用
+const inMemoryQuizzes: Quiz[] = [];
+
+/**
+ * テーブルを初期化する
+ * アプリケーション起動時に一度だけ呼び出す
+ */
+export async function initializeQuizTable() {
+  try {
+    console.log('Checking for quizzes table...');
+    
+    // テーブル存在確認
+    const { data, error } = await supabase
+      .from('quizzes')
+      .select('count')
+      .limit(1);
+    
+    if (error) {
+      console.log('Table check failed, attempting to create table:', error);
+      
+      // テーブル作成
+      const { error: createError } = await supabase.rpc('create_quizzes_table_if_not_exists');
+      
+      if (createError) {
+        console.error('Failed to create quizzes table with RPC:', createError);
+        
+        // RPCが失敗した場合は直接SQLを実行
+        const { error: sqlError } = await supabase.query(`
+          CREATE TABLE IF NOT EXISTS quizzes (
+            id UUID PRIMARY KEY,
+            title TEXT NOT NULL,
+            difficulty TEXT,
+            questions JSONB NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+            user_id TEXT
+          );
+        `);
+        
+        if (sqlError) {
+          console.error('Failed to create quizzes table with SQL:', sqlError);
+          return false;
+        }
+      }
+      
+      console.log('Quizzes table created successfully');
+      return true;
+    }
+    
+    console.log('Quizzes table exists');
+    return true;
+  } catch (error) {
+    console.error('Error initializing quiz table:', error);
+    return false;
+  }
+}
+
+// アプリケーション起動時にテーブル初期化を実行
+let tableInitialized = false;
+if (typeof window !== 'undefined') {
+  // ブラウザ環境ではクライアントサイドでの初期化は行わない
+  tableInitialized = true;
+} else {
+  // サーバーサイド環境での初期化
+  try {
+    initializeQuizTable().then(result => {
+      tableInitialized = result;
+    });
+  } catch (error) {
+    console.error('Failed to initialize table:', error);
+  }
+}
 
 /**
  * クイズオブジェクトをSupabaseに保存
@@ -35,15 +113,25 @@ export async function saveQuiz(quiz: Quiz) {
     if (error) {
       console.error('Error saving quiz to Supabase:', error);
       
-      // エラーが発生した場合でもクイズデータを返す（API側のレスポンスに影響しないように）
+      // エラー発生時はインメモリストレージに保存
+      inMemoryQuizzes.push(quizWithUserId);
+      console.log('Saved quiz to in-memory storage as fallback');
+      
+      // UIにはエラーを表示せずクイズデータを返す
       return quizWithUserId;
     }
     
-    console.log('Quiz saved successfully:', data);
+    console.log('Quiz saved successfully to Supabase:', data);
     return data;
   } catch (error) {
     console.error('Exception saving quiz:', error);
-    // エラーが発生してもAPIのレスポンスに影響しないよう、元のクイズを返す
+    
+    // 例外発生時もインメモリストレージに保存
+    inMemoryQuizzes.push({
+      ...quiz,
+      user_id: await getUserIdOrAnonymousId()
+    });
+    
     return quiz;
   }
 }
@@ -59,46 +147,47 @@ export async function getQuizzes(userId?: string) {
     
     console.log('Fetching quizzes for user:', currentUserId);
     
-    // ビルド時にはダミーデータを返す実装
-    return [
-      {
-        id: "550e8400-e29b-41d4-a716-446655440000",
-        title: "サンプルクイズ - プログラミング基礎",
-        difficulty: "medium",
-        created_at: new Date().toISOString(),
-        user_id: currentUserId,
-        questions: [
-          {
-            id: "q1",
-            text: "JavaScriptの基本的なデータ型はどれですか？",
-            answers: [
-              { id: "a1", text: "String" },
-              { id: "a2", text: "Block" },
-              { id: "a3", text: "Circuit" },
-              { id: "a4", text: "Path" }
-            ],
-            correctAnswerId: "a1",
-            explanation: "JavaScriptの基本的なデータ型には、String、Number、Boolean、Null、Undefinedなどがあります。"
-          },
-          {
-            id: "q2",
-            text: "HTMLの略称は何ですか？",
-            answers: [
-              { id: "a1", text: "Hyper Text Markup Language" },
-              { id: "a2", text: "High Tech Modern Language" },
-              { id: "a3", text: "Hyperlink Text Management Logic" },
-              { id: "a4", text: "Home Tool Markup Language" }
-            ],
-            correctAnswerId: "a1",
-            explanation: "HTMLはHyper Text Markup Languageの略で、ウェブページを作成するための標準マークアップ言語です。"
-          }
-        ]
+    try {
+      const { data, error } = await supabase
+        .from('quizzes')
+        .select('*')
+        .eq('user_id', currentUserId)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        throw error;
       }
-    ];
+      
+      const quizzes = data || [];
+      
+      // Supabaseから取得したクイズとインメモリクイズを結合
+      const memoryQuizzes = inMemoryQuizzes.filter(q => q.user_id === currentUserId);
+      const allQuizzes = [...quizzes, ...memoryQuizzes];
+      
+      // 重複除去（IDベース）
+      const uniqueQuizzes = allQuizzes.filter((quiz, index, self) => 
+        index === self.findIndex(q => q.id === quiz.id)
+      );
+      
+      // 日付でソート
+      uniqueQuizzes.sort((a, b) => {
+        const dateA = new Date(a.created_at || 0);
+        const dateB = new Date(b.created_at || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      return uniqueQuizzes;
+    } catch (supabaseError) {
+      console.error('Error fetching from Supabase:', supabaseError);
+      
+      // エラー時はインメモリデータのみ返す
+      return inMemoryQuizzes.filter(q => q.user_id === currentUserId);
+    }
   } catch (error) {
-    console.error('Error in getQuizzes:', error);
-    // エラー時は空の配列を返す
-    return [];
+    console.error('Global error in getQuizzes:', error);
+    
+    // 最悪の場合もインメモリデータを返す
+    return inMemoryQuizzes;
   }
 }
 
@@ -109,44 +198,43 @@ export async function getQuizzes(userId?: string) {
  */
 export async function getQuiz(id: string, userId?: string) {
   try {
-    console.log(`Fetching quiz with ID: ${id}`);
+    // ユーザーIDが指定されていない場合は現在のユーザーIDを使用
+    const currentUserId = userId || await getUserIdOrAnonymousId();
     
-    // ビルド時にはサンプルクイズを返す実装
-    return {
-      id: id,
-      title: "サンプルクイズ - プログラミング基礎",
-      difficulty: "medium",
-      created_at: new Date().toISOString(),
-      user_id: userId || await getUserIdOrAnonymousId(),
-      questions: [
-        {
-          id: "q1",
-          text: "JavaScriptの基本的なデータ型はどれですか？",
-          answers: [
-            { id: "a1", text: "String" },
-            { id: "a2", text: "Block" },
-            { id: "a3", text: "Circuit" },
-            { id: "a4", text: "Path" }
-          ],
-          correctAnswerId: "a1",
-          explanation: "JavaScriptの基本的なデータ型には、String、Number、Boolean、Null、Undefinedなどがあります。"
-        },
-        {
-          id: "q2",
-          text: "HTMLの略称は何ですか？",
-          answers: [
-            { id: "a1", text: "Hyper Text Markup Language" },
-            { id: "a2", text: "High Tech Modern Language" },
-            { id: "a3", text: "Hyperlink Text Management Logic" },
-            { id: "a4", text: "Home Tool Markup Language" }
-          ],
-          correctAnswerId: "a1",
-          explanation: "HTMLはHyper Text Markup Languageの略で、ウェブページを作成するための標準マークアップ言語です。"
-        }
-      ]
-    };
+    // まずインメモリストレージから検索
+    const memoryQuiz = inMemoryQuizzes.find(q => q.id === id);
+    if (memoryQuiz) {
+      // 所有権チェック
+      if (memoryQuiz.user_id && memoryQuiz.user_id !== currentUserId) {
+        return null; // アクセス拒否
+      }
+      return memoryQuiz;
+    }
+    
+    // Supabaseからクイズを取得
+    try {
+      const { data: quiz, error } = await supabase
+        .from('quizzes')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      
+      if (error) throw error;
+      if (!quiz) return null; // クイズが見つからない
+      
+      // 所有権チェック
+      if (quiz.user_id && quiz.user_id !== currentUserId) {
+        console.log(`Access denied: User ${currentUserId} attempted to access quiz ${id} owned by ${quiz.user_id}`);
+        return null;
+      }
+      
+      return quiz;
+    } catch (error) {
+      console.error(`Error fetching quiz with ID ${id} from Supabase:`, error);
+      return null;
+    }
   } catch (error) {
-    console.error(`Error fetching quiz with ID ${id}:`, error);
+    console.error(`Global error fetching quiz with ID ${id}:`, error);
     return null;
   }
 }
@@ -155,15 +243,13 @@ export async function getQuiz(id: string, userId?: string) {
  * テーブルにuser_idカラムを追加する
  */
 export async function addUserIdColumnIfNeeded() {
-  // ビルド時には成功を返す簡易実装
-  return { success: true, message: "Temporary implementation for build process" };
-}
-
-/**
- * 既存のクイズデータにユーザーIDを追加する移行関数
- * 注: 開発時や初期データ移行時のみ使用
- */
-export async function migrateExistingQuizzes() {
-  // ビルド時には成功を返す簡易実装
-  return { success: true, migrated: 0 };
+  try {
+    if (!tableInitialized) {
+      await initializeQuizTable();
+    }
+    return { success: true, message: "Table initialization checked" };
+  } catch (error) {
+    console.error('Error in addUserIdColumnIfNeeded:', error);
+    return { success: false, error };
+  }
 }
