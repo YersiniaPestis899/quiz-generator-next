@@ -3,23 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 
+/**
+ * 認証ボタンコンポーネント
+ * Google認証ログイン/ログアウト機能と状態表示を提供
+ */
 export default function AuthButton() {
   const { user, signInWithGoogle, signOut, isLoading } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // ログイン処理
-  const handleSignIn = async () => {
-    setIsProcessing(true);
-    await signInWithGoogle();
-    setIsProcessing(false);
-  };
-
-  // ログアウト処理
-  const handleSignOut = async () => {
-    setIsProcessing(true);
-    await signOut();
-    setIsProcessing(false);
-  };
 
   // 匿名データの移行機能
   const migrateAnonymousData = async () => {
@@ -29,6 +19,8 @@ export default function AuthButton() {
       // 匿名IDの取得
       const anonymousId = localStorage.getItem('anonymousUserId');
       if (!anonymousId || !anonymousId.startsWith('anon_')) return;
+      
+      console.log('匿名データの移行を開始します:', anonymousId, '->', user.id);
       
       // 移行処理のAPIコール
       const response = await fetch('/api/migrate-data', {
@@ -53,13 +45,37 @@ export default function AuthButton() {
       console.error('データ移行エラー:', error);
     }
   };
-
+  
   // ログイン直後に移行処理を実行
   useEffect(() => {
     if (user) {
       migrateAnonymousData();
     }
   }, [user]);
+
+  // ログイン処理
+  const handleSignIn = async () => {
+    try {
+      setIsProcessing(true);
+      await signInWithGoogle();
+    } catch (error) {
+      console.error('ログイン処理エラー:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // ログアウト処理
+  const handleSignOut = async () => {
+    try {
+      setIsProcessing(true);
+      await signOut();
+    } catch (error) {
+      console.error('ログアウト処理エラー:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   if (isLoading) {
     return (
