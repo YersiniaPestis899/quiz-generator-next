@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getQuizzes, getQuiz, addUserIdColumnIfNeeded } from '@/lib/supabase';
 import { getUserIdOrAnonymousId } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';  // このインポートを追加
 
 /**
  * GET /api/quizzes
