@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Quiz } from './types';
 import { getUserIdOrAnonymousId } from './auth';
+import { saveQuizToLocalStorage, getQuizzesFromLocalStorage } from './localStorageUtils';
 
 // 環境変数からSupabase認証情報を取得
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -94,6 +95,9 @@ export async function saveQuiz(quiz: Quiz) {
     
     console.log('Saving quiz to Supabase:', { id: quiz.id, title: quiz.title });
     
+    // まずローカルストレージに保存（フォールバックとして）
+    saveQuizToLocalStorage(quizWithUserId);
+    
     const { data, error } = await supabase
       .from('quizzes')
       .insert([quizWithUserId])
@@ -148,11 +152,18 @@ export async function getQuizzes(userId?: string) {
         throw error;
       }
       
-      const quizzes = data || [];
+      const supabaseQuizzes = data || [];
       
-      // Supabaseから取得したクイズとインメモリクイズを結合
-      const memoryQuizzes = inMemoryQuizzes.filter(q => q.user_id === currentUserId);
-      const allQuizzes = [...quizzes, ...memoryQuizzes];
+      // ローカルストレージからも取得
+      const localQuizzes = getQuizzesFromLocalStorage()
+        .filter(q => q.user_id === currentUserId);
+      
+      // Supabaseから取得したクイズとローカルクイズとインメモリクイズを結合
+      const allQuizzes = [
+        ...supabaseQuizzes, 
+        ...localQuizzes, 
+        ...inMemoryQuizzes.filter(q => q.user_id === currentUserId)
+      ];
       
       // 重複除去（IDベース）
       const uniqueQuizzes = allQuizzes.filter((quiz, index, self) => 
@@ -170,14 +181,34 @@ export async function getQuizzes(userId?: string) {
     } catch (supabaseError) {
       console.error('Error fetching from Supabase:', supabaseError);
       
-      // エラー時はインメモリデータのみ返す
-      return inMemoryQuizzes.filter(q => q.user_id === currentUserId);
+      // エラー時はローカルストレージとインメモリデータのみ返す
+      const localQuizzes = getQuizzesFromLocalStorage()
+        .filter(q => q.user_id === currentUserId);
+      
+      const memoryQuizzes = inMemoryQuizzes.filter(q => q.user_id === currentUserId);
+      
+      const allQuizzes = [...localQuizzes, ...memoryQuizzes];
+      
+      // 重複除去（IDベース）
+      const uniqueQuizzes = allQuizzes.filter((quiz, index, self) => 
+        index === self.findIndex(q => q.id === quiz.id)
+      );
+      
+      // 日付でソート
+      uniqueQuizzes.sort((a, b) => {
+        const dateA = new Date(a.created_at || 0);
+        const dateB = new Date(b.created_at || 0);
+        return dateB.getTime() - dateA.getTime();
+      });
+      
+      return uniqueQuizzes;
     }
   } catch (error) {
     console.error('Global error in getQuizzes:', error);
     
-    // 最悪の場合もインメモリデータを返す
-    return inMemoryQuizzes;
+    // 最悪の場合もローカルストレージとインメモリデータを返す
+    const localQuizzes = getQuizzesFromLocalStorage();
+    return [...localQuizzes, ...inMemoryQuizzes];
   }
 }
 
@@ -191,17 +222,30 @@ export async function getQuiz(id: string, userId?: string) {
     // ユーザーIDが指定されていない場合は現在のユーザーIDを使用
     const currentUserId = userId || await getUserIdOrAnonymousId();
     
-    // まずインメモリストレージから検索
+    // まずローカルストレージから検索
+    const localQuizzes = getQuizzesFromLocalStorage();
+    const localQuiz = localQuizzes.find(q => q.id === id);
+    if (localQuiz) {
+      // 所有権チェック
+      if (localQuiz.user_id && localQuiz.user_id !== currentUserId) {
+        console.log(`Access denied: User ${currentUserId} attempted to access local quiz ${id} owned by ${localQuiz.user_id}`);
+        return null; // アクセス拒否
+      }
+      return localQuiz;
+    }
+    
+    // 次にインメモリストレージから検索
     const memoryQuiz = inMemoryQuizzes.find(q => q.id === id);
     if (memoryQuiz) {
       // 所有権チェック
       if (memoryQuiz.user_id && memoryQuiz.user_id !== currentUserId) {
+        console.log(`Access denied: User ${currentUserId} attempted to access memory quiz ${id} owned by ${memoryQuiz.user_id}`);
         return null; // アクセス拒否
       }
       return memoryQuiz;
     }
     
-    // Supabaseからクイズを取得
+    // 最後にSupabaseからクイズを取得
     try {
       const { data: quiz, error } = await supabase
         .from('quizzes')
@@ -214,9 +258,12 @@ export async function getQuiz(id: string, userId?: string) {
       
       // 所有権チェック
       if (quiz.user_id && quiz.user_id !== currentUserId) {
-        console.log(`Access denied: User ${currentUserId} attempted to access quiz ${id} owned by ${quiz.user_id}`);
-        return null;
+        console.log(`Access denied: User ${currentUserId} attempted to access Supabase quiz ${id} owned by ${quiz.user_id}`);
+        return null; // アクセス拒否
       }
+      
+      // 見つかったら、ローカルストレージにも保存しておく
+      saveQuizToLocalStorage(quiz);
       
       return quiz;
     } catch (error) {

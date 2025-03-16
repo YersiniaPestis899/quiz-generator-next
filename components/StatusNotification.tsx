@@ -28,45 +28,38 @@ export default function StatusNotification({
   const [isWarning, setIsWarning] = useState(false);
   
   useEffect(() => {
-    // 環境変数のチェック
-    const checkEnvironment = () => {
-      const warnings = [];
-      
-      if (options.supabaseCheckEnabled) {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    // サーバー側の状態を確認するAPIを呼び出す
+    async function checkServerStatus() {
+      try {
+        const response = await fetch('/api/check-environment');
+        const data = await response.json();
         
-        if (!supabaseUrl || !supabaseKey || supabaseUrl === '' || supabaseKey === '') {
-          warnings.push('Supabase接続が構成されていません。クイズがローカルにのみ保存されます。');
+        if (data.warnings && data.warnings.length > 0) {
+          // 表示するかどうかオプションでフィルタリング
+          const filteredWarnings = data.warnings.filter((warning: string) => {
+            if (warning.includes('Supabase') && !options.supabaseCheckEnabled) return false;
+            if (warning.includes('AWS') && !options.awsCheckEnabled) return false;
+            return true;
+          });
+          
+          if (filteredWarnings.length > 0) {
+            setMessage(filteredWarnings.join(' '));
+            setIsWarning(true);
+            setVisible(true);
+            
+            if (options.autoHide) {
+              setTimeout(() => {
+                setVisible(false);
+              }, options.autoHideDelay);
+            }
+          }
         }
+      } catch (error) {
+        console.error('環境確認に失敗しました:', error);
       }
-      
-      if (options.awsCheckEnabled) {
-        const awsRegion = process.env.AWS_REGION;
-        const awsKey = process.env.AWS_ACCESS_KEY_ID;
-        const awsSecret = process.env.AWS_SECRET_ACCESS_KEY;
-        
-        if (!awsRegion || !awsKey || !awsSecret || awsRegion === '' || awsKey === '' || awsSecret === '') {
-          warnings.push('AWS Bedrock接続が構成されていません。クイズ生成にテンプレートが使用されます。');
-        }
-      }
-      
-      // 警告があれば表示
-      if (warnings.length > 0) {
-        setMessage(warnings.join(' '));
-        setIsWarning(true);
-        setVisible(true);
-        
-        // 自動非表示
-        if (options.autoHide) {
-          setTimeout(() => {
-            setVisible(false);
-          }, options.autoHideDelay);
-        }
-      }
-    };
+    }
     
-    checkEnvironment();
+    checkServerStatus();
   }, [options]);
   
   if (!visible) {
