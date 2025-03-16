@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Quiz } from '@/lib/types';
+import { useAuth } from '@/lib/AuthContext';
 
 interface QuizListProps {
   onSelectQuiz: (quiz: Quiz) => void;
@@ -15,7 +16,8 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [anonymousId, setAnonymousId] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
+  const { user, isLoading: authLoading } = useAuth();
   
   // 難易度の日本語表示マッピング
   const difficultyLabels: Record<string, string> = {
@@ -24,91 +26,127 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
     'hard': '難しい'
   };
 
-  // コンポーネントマウント時にローカルストレージから匿名IDを取得
-  useEffect(() => {
-    try {
-      // ブラウザの環境でのみ実行
-      if (typeof window !== 'undefined') {
-        const storedAnonymousId = localStorage.getItem('anonymousUserId');
-        if (storedAnonymousId) {
-          console.log('Retrieved anonymousId from localStorage:', storedAnonymousId);
-          setAnonymousId(storedAnonymousId);
-        } else {
-          // 新規匿名IDを生成して保存
-          const newAnonymousId = `anon_${Math.random().toString(36).substring(2, 15)}`;
-          console.log('Generated new anonymousId:', newAnonymousId);
-          localStorage.setItem('anonymousUserId', newAnonymousId);
-          setAnonymousId(newAnonymousId);
-        }
-      }
-    } catch (err) {
-      console.error('Error handling localStorage:', err);
-      // localStorage関連のエラーは無視して通常のフェッチを試みる
-      fetchQuizzesWithoutAnonymousId();
-    }
-  }, []);
-
-  // 匿名IDがない場合の通常フェッチ
-  const fetchQuizzesWithoutAnonymousId = async () => {
+  // 洗練されたフェッチ関数 (useCallbackでメモ化)
+  const fetchQuizzes = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/quizzes');
+      console.log('クイズデータを再取得中...');
+      
+      // ブラウザストレージからIDを取得
+      let queryParams = '';
+      
+      if (typeof window !== 'undefined') {
+        const storedId = localStorage.getItem('anonymousUserId');
+        if (storedId) {
+          console.log('使用するID:', storedId);
+          queryParams = `?anonymousId=${encodeURIComponent(storedId)}`;
+        }
+      }
+      
+      // APIコール (ID情報付き)
+      const response = await fetch(`/api/quizzes${queryParams}`);
       
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('APIエラーレスポンス:', errorData);
         throw new Error(errorData.message || 'クイズの取得に失敗しました');
       }
       
       const data = await response.json();
+      console.log(`${data.length}件のクイズを取得しました`);
+      
+      // 最新のタイムスタンプでソート
+      data.sort((a: Quiz, b: Quiz) => {
+        const dateA = new Date(a.created_at || 0).getTime();
+        const dateB = new Date(b.created_at || 0).getTime();
+        return dateB - dateA;
+      });
+      
       setQuizzes(data);
+      setError(null);
     } catch (err: any) {
       console.error('クイズ取得エラー:', err);
       setError('クイズの読み込みに失敗しました: ' + err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // 依存配列を空に
 
-  // 匿名IDを取得後、クイズ一覧を取得
+  // コンポーネントマウント時の初期データ取得
   useEffect(() => {
-    // 匿名IDが取得できていない場合は何もしない
-    if (!anonymousId) return;
+    fetchQuizzes();
     
-    const fetchQuizzes = async () => {
-      try {
-        setLoading(true);
-        console.log('Fetching quizzes with anonymousId:', anonymousId);
-        
-        // 匿名IDをクエリパラメータとして追加
-        const response = await fetch(`/api/quizzes?anonymousId=${encodeURIComponent(anonymousId)}`);
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('API error response:', errorData);
-          throw new Error(errorData.message || 'クイズの取得に失敗しました');
-        }
-        
-        const data = await response.json();
-        console.log(`Fetched ${data.length} quizzes`);
-        setQuizzes(data);
-      } catch (err: any) {
-        console.error('クイズ取得エラー:', err);
-        setError('クイズの読み込みに失敗しました: ' + err.message);
-        
-        // エラー発生時にバックアップとして通常フェッチを試みる
-        try {
-          console.log('Attempting fallback fetch without anonymousId');
-          await fetchQuizzesWithoutAnonymousId();
-        } catch (fallbackErr) {
-          console.error('Fallback fetch also failed:', fallbackErr);
-        }
-      } finally {
-        setLoading(false);
+    // ローカルストレージの変更を監視する (他のタブでの変更に対応)
+    const handleStorageChange = (event: StorageEvent) => {
+      if (event.key === 'anonymousUserId' || event.key === 'quizzes_updated') {
+        console.log('ストレージ変更を検出:', event.key);
+        fetchQuizzes();
       }
     };
     
+    window.addEventListener('storage', handleStorageChange);
+    
+    // ページの可視性変更時に更新（タブがアクティブになった時）
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('タブがアクティブになりました - データを再取得');
+        fetchQuizzes();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // クリーンアップ関数
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchQuizzes]); // メモ化されたfetchQuizzesを依存配列に
+
+  // 認証状態変更時のデータ再取得
+  useEffect(() => {
+    if (!authLoading) { // 認証読み込みが完了した時のみ
+      console.log('認証状態変更を検出 - データを再取得');
+      fetchQuizzes();
+    }
+  }, [user, authLoading, fetchQuizzes]); // 認証状態が変わったときに再フェッチ
+
+  // 定期的な更新 (60秒ごと)
+  useEffect(() => {
+    const refreshIntervalId = setInterval(() => {
+      // 最後の更新から60秒以上経過している場合のみ更新
+      if (Date.now() - lastRefresh > 60000) {
+        console.log('定期更新 - クイズデータを再取得');
+        fetchQuizzes();
+        setLastRefresh(Date.now());
+      }
+    }, 30000); // 30秒ごとにチェック
+    
+    return () => clearInterval(refreshIntervalId);
+  }, [fetchQuizzes, lastRefresh]);
+
+  // カスタムイベントリスナーを追加 (他コンポーネントからの更新通知用)
+  useEffect(() => {
+    const handleQuizUpdated = () => {
+      console.log('クイズ更新イベントを検出');
+      fetchQuizzes();
+      setLastRefresh(Date.now());
+    };
+    
+    // カスタムイベントの登録
+    window.addEventListener('quizUpdated', handleQuizUpdated);
+    
+    return () => {
+      window.removeEventListener('quizUpdated', handleQuizUpdated);
+    };
+  }, [fetchQuizzes]);
+
+  // 手動更新関数
+  const refreshQuizzes = () => {
+    console.log('手動更新リクエスト');
     fetchQuizzes();
-  }, [anonymousId]);
+    setLastRefresh(Date.now());
+  };
   
   // ボタンクリック音再生関数（プレースホルダー）
   const playButtonClickSound = () => {
@@ -118,7 +156,16 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
   if (loading) {
     return (
       <div className="card">
-        <h3 className="text-xl mb-4">あなたのクイズ一覧</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl">あなたのクイズ一覧</h3>
+          <button 
+            onClick={refreshQuizzes}
+            className="text-xs text-text-secondary px-2 py-1 rounded-full hover:bg-primary/10"
+            disabled={loading}
+          >
+            更新
+          </button>
+        </div>
         <div className="loading">クイズを読み込み中...</div>
       </div>
     );
@@ -127,7 +174,15 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
   if (error) {
     return (
       <div className="card">
-        <h3 className="text-xl mb-4">あなたのクイズ一覧</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl">あなたのクイズ一覧</h3>
+          <button 
+            onClick={refreshQuizzes}
+            className="text-xs text-text-secondary px-2 py-1 rounded-full hover:bg-primary/10"
+          >
+            再試行
+          </button>
+        </div>
         <div className="error">{error}</div>
       </div>
     );
@@ -136,7 +191,15 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
   if (quizzes.length === 0) {
     return (
       <div className="card">
-        <h3 className="text-xl mb-4">あなたのクイズ一覧</h3>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl">あなたのクイズ一覧</h3>
+          <button 
+            onClick={refreshQuizzes}
+            className="text-xs text-text-secondary px-2 py-1 rounded-full hover:bg-primary/10"
+          >
+            更新
+          </button>
+        </div>
         <div className="empty-list">保存されたクイズはありません。新しいクイズを作成してください。</div>
       </div>
     );
@@ -144,7 +207,15 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
   
   return (
     <div className="card">
-      <h3 className="text-xl mb-4">あなたの保存済みクイズ</h3>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl">あなたの保存済みクイズ</h3>
+        <button 
+          onClick={refreshQuizzes}
+          className="text-xs text-text-secondary px-2 py-1 rounded-full hover:bg-primary/10"
+        >
+          更新
+        </button>
+      </div>
       <ul className="quiz-list">
         {quizzes.map((quiz) => (
           <li key={quiz.id} onClick={() => {
