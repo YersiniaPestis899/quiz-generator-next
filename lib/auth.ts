@@ -24,55 +24,75 @@ export async function getCurrentUserId() {
  * セッションのユーザーID、または匿名ユーザー識別子を取得
  * 認証していない場合はクッキーやローカルストレージに保存されたID、
  * またはランダムIDを生成して返す
+ * ユーザー識別の優先順位: クッキー > 認証済みセッション > ローカルストレージ > 新規生成
  */
 export async function getUserIdOrAnonymousId() {
   try {
-    // まず認証済みセッションを確認
-    const userId = await getCurrentUserId();
-    if (userId) return userId;
-    
-    // 次にクッキーを確認
+    // まずクッキーを確認（最優先）
     const cookieUserId = getUserIdFromCookie();
-    if (cookieUserId) return cookieUserId;
+    if (cookieUserId) {
+      console.log('クッキーからユーザーIDを取得:', cookieUserId);
+      // ローカルストレージにも同期して一貫性を確保
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('anonymousUserId', cookieUserId);
+        } catch (e) {
+          console.error('ローカルストレージへの保存に失敗:', e);
+        }
+      }
+      return cookieUserId;
+    }
     
-    // ブラウザ環境かチェック
+    // 次に認証済みセッションを確認
+    const userId = await getCurrentUserId();
+    if (userId) {
+      console.log('認証セッションからユーザーIDを取得:', userId);
+      // 認証済みIDもクッキーとローカルストレージに保存
+      saveUserIdToCookie(userId);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('anonymousUserId', userId);
+        } catch (e) {
+          console.error('ローカルストレージへの保存に失敗:', e);
+        }
+      }
+      return userId;
+    }
+    
+    // 次にローカルストレージを確認
     if (typeof window !== 'undefined') {
       try {
-        // 既存の匿名IDを確認
-        let anonymousId = localStorage.getItem('anonymousUserId');
-        
-        // 存在しない場合は新規生成して保存
-        if (!anonymousId) {
-          anonymousId = `anon_${Math.random().toString(36).substring(2, 15)}`;
-          localStorage.setItem('anonymousUserId', anonymousId);
-          // クッキーにも保存
-          saveUserIdToCookie(anonymousId);
-        } else {
-          // ローカルストレージにあってクッキーにない場合はクッキーにも保存
-          saveUserIdToCookie(anonymousId);
+        const storageUserId = localStorage.getItem('anonymousUserId');
+        if (storageUserId) {
+          console.log('ローカルストレージからユーザーIDを取得:', storageUserId);
+          // クッキーにも保存して一貫性を確保
+          saveUserIdToCookie(storageUserId);
+          return storageUserId;
         }
-        
-        return anonymousId;
-      } catch (storageError) {
-        console.error('Error accessing localStorage:', storageError);
-        // ストレージエラーの場合は一時的なIDを返す
-        const tempId = `anon_temp_${Math.random().toString(36).substring(2, 15)}`;
-        // できればクッキーに保存
-        try {
-          saveUserIdToCookie(tempId);
-        } catch (e) {
-          console.error('クッキーへの保存にも失敗しました:', e);
-        }
-        return tempId;
+      } catch (e) {
+        console.error('ローカルストレージアクセスエラー:', e);
       }
     }
     
-    // サーバーサイドでの実行時は仮のIDを返す
-    return `anon_server_${Math.random().toString(36).substring(2, 15)}`;
+    // 新規ID生成（両方の保存先に保存）
+    const newUserId = `anon_${Math.random().toString(36).substring(2, 15)}`;
+    console.log('新規ユーザーIDを生成:', newUserId);
+    
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('anonymousUserId', newUserId);
+      } catch (e) {
+        console.error('ローカルストレージへの保存に失敗:', e);
+      }
+    }
+    
+    saveUserIdToCookie(newUserId);
+    return newUserId;
   } catch (error) {
     console.error('Error in getUserIdOrAnonymousId:', error);
     // エラー発生時も一時的なIDを返す
-    return `anon_error_${Math.random().toString(36).substring(2, 15)}`;
+    const tempId = `anon_error_${Math.random().toString(36).substring(2, 15)}`;
+    return tempId;
   }
 }
 
