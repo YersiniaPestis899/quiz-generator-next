@@ -214,19 +214,24 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
         <div className="form-row">
           <div className="form-group">
             <label htmlFor="numQuestions">質問数</label>
-            <input 
-              type="number" 
+            <select 
               id="numQuestions" 
               value={numQuestions} 
-              onChange={(e) => {
-                const value = parseInt(e.target.value) || 1;
-                setNumQuestions(Math.min(Math.max(value, 1), 10)); // 1〜10の範囲に制限
-              }} 
-              min={1} 
-              max={10} // 10問に制限
+              onChange={(e) => setNumQuestions(parseInt(e.target.value))}
               className="focus:ring-2 focus:ring-primary focus:outline-none"
               disabled={loading}
-            />
+            >
+              <option value="1">1問</option>
+              <option value="2">2問</option>
+              <option value="3">3問</option>
+              <option value="4">4問</option>
+              <option value="5">5問</option>
+              <option value="6">6問</option>
+              <option value="7">7問</option>
+              <option value="8">8問</option>
+              <option value="9">9問</option>
+              <option value="10">10問</option>
+            </select>
             <div className="input-helper-text text-xs">
               {numQuestions > 6 ? "多い問題数は生成に時間がかかります" : ""}
             </div>

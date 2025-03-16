@@ -41,22 +41,12 @@ export async function initializeQuizTable() {
       if (createError) {
         console.error('Failed to create quizzes table with RPC:', createError);
         
-        // RPCが失敗した場合は直接SQLを実行
-        const { error: sqlError } = await supabase.query(`
-          CREATE TABLE IF NOT EXISTS quizzes (
-            id UUID PRIMARY KEY,
-            title TEXT NOT NULL,
-            difficulty TEXT,
-            questions JSONB NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            user_id TEXT
-          );
-        `);
-        
-        if (sqlError) {
-          console.error('Failed to create quizzes table with SQL:', sqlError);
-          return false;
-        }
+        // RPCが失敗した場合は別のアプローチを試みる
+        // Supabase clientには直接的なquery()メソッドがないため、
+        // テーブル作成をスキップして、インメモリストレージにフォールバック
+        console.error('Unable to create quizzes table - falling back to in-memory storage');
+        // エラーを返すのではなく、テーブル作成に失敗してもアプリケーションは動作できるようにする
+        return false;
       }
       
       console.log('Quizzes table created successfully');
