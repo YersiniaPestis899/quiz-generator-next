@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+/**
+ * 匿名ユーザーデータを認証済みユーザーIDに移行するAPI
+ * ログイン後に匿名IDで作成されたクイズを認証済みユーザーIDに紐付け直します
+ */
 export async function POST(request: NextRequest) {
   try {
     const { anonymousId, userId } = await request.json();
@@ -34,8 +38,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('データ移行処理エラー:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
     return NextResponse.json(
-      { message: 'サーバーエラーが発生しました' },
+      { message: 'サーバーエラーが発生しました', error: errorMessage },
       { status: 500 }
     );
   }
