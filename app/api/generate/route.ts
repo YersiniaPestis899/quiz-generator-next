@@ -38,6 +38,17 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // AWS環境変数のチェック
+    const awsRegion = process.env.AWS_REGION;
+    const awsKey = process.env.AWS_ACCESS_KEY_ID;
+    const awsSecret = process.env.AWS_SECRET_ACCESS_KEY;
+    
+    console.log('API: AWS環境変数チェック', {
+      region: awsRegion ? '設定あり' : '未設定',
+      accessKeyId: awsKey ? '設定あり' : '未設定',
+      secretAccessKey: awsSecret ? '設定あり' : '未設定'
+    });
+    
     console.log('API: Calling Claude 3.5 Sonnet to generate quiz...');
     // Claude 3.5 Sonnetを使用してクイズデータを生成
     const quizData = await generateQuizWithClaude({ title, content, numQuestions, difficulty });

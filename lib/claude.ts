@@ -2,13 +2,13 @@ import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedroc
 import { QuizGenerationInput } from './types';
 import { detectSpecialCategory, SPECIAL_CATEGORIES } from './specialCategories';
 
-// Bedrockクライアントをシングルトンパターンでnode.js環境で初期化
+// BedrockクライアントをシングルトンパターンでNode.js環境で初期化
 let bedrockClient: BedrockRuntimeClient | null = null;
 
 function getBedrockClient() {
   if (!bedrockClient && typeof process !== 'undefined') {
     bedrockClient = new BedrockRuntimeClient({ 
-      region: process.env.AWS_REGION || 'us-east-1',
+      region: process.env.AWS_REGION || 'us-west-2',
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
@@ -44,6 +44,13 @@ export async function generateQuizWithClaude(input: QuizGenerationInput) {
     // AWS Bedrockを使用してClaude呼び出し
     // アクセス権限が確認された Claude 3.5 Sonnet モデルを使用
     const modelId = 'anthropic.claude-3-5-sonnet-20241022-v2:0';
+    
+    console.log('使用するモデルID:', modelId);
+    console.log('AWS Credentials:', {
+      region: process.env.AWS_REGION || '設定なし',
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID ? '設定あり' : '設定なし',
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ? '設定あり' : '設定なし'
+    });
     
     const response = await bedrockRuntime.send(
       new InvokeModelCommand({
