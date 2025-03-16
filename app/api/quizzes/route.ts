@@ -11,27 +11,38 @@ import { getUserIdOrAnonymousId } from '@/lib/auth';
 export async function GET(request: NextRequest) {
   try {
     console.log('API: Received request to fetch quizzes');
-    // URLからクイズIDとユーザーの匿名IDを抽出
+    // URLからすべての可能なIDパラメータを抽出
     const url = new URL(request.url);
     const idParam = url.searchParams.get('id');
     const anonymousId = url.searchParams.get('anonymousId');
+    const userId = url.searchParams.get('userId'); // 明示的なユーザーIDパラメータを追加
     
-    console.log('API Request parameters:', { idParam, anonymousId });
+    console.log('API Request parameters:', { idParam, anonymousId, userId });
 
     // データベースカラム構造を確認
     console.log('API: Checking database column structure...');
     const columnCheck = await addUserIdColumnIfNeeded();
     console.log('Column check result:', columnCheck);
 
-    // 現在のユーザーIDを取得
+    // 現在のユーザーIDを取得（優先順位: 明示的なuserID > 匿名ID > 自動取得）
     console.log('API: Getting user ID...');
-    const userId = anonymousId || await getUserIdOrAnonymousId();
-    console.log('User ID for query:', userId);
+    let currentUserId;
+    if (userId) {
+      console.log('API: Using provided userId:', userId);
+      currentUserId = userId;
+    } else if (anonymousId) {
+      console.log('API: Using provided anonymousId:', anonymousId);
+      currentUserId = anonymousId;
+    } else {
+      console.log('API: No ID provided, getting from auth context');
+      currentUserId = await getUserIdOrAnonymousId();
+    }
+    console.log('User ID for query:', currentUserId);
     
     // IDが指定されている場合は特定のクイズを取得
     if (idParam) {
       try {
-        const quiz = await getQuiz(idParam, userId);
+        const quiz = await getQuiz(idParam, currentUserId);
         
         if (!quiz) {
           return NextResponse.json(
@@ -55,8 +66,8 @@ export async function GET(request: NextRequest) {
     
     // ユーザーのクイズを取得
     try {
-      const quizzes = await getQuizzes(userId);
-      console.log(`Retrieved ${quizzes.length} quizzes for user ${userId}`);
+      const quizzes = await getQuizzes(currentUserId);
+      console.log(`Retrieved ${quizzes.length} quizzes for user ${currentUserId}`);
       
       return NextResponse.json(quizzes);
     } catch (quizError) {
