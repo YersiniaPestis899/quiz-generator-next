@@ -52,6 +52,7 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
   const fetchQuizzesWithoutAnonymousId = async () => {
     try {
       setLoading(true);
+      console.log('Fetching quizzes without anonymousId');
       const response = await fetch('/api/quizzes');
       
       if (!response.ok) {
@@ -60,6 +61,7 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
       }
       
       const data = await response.json();
+      console.log(`Fetched ${data.length} quizzes without anonymousId`);
       setQuizzes(data);
     } catch (err: any) {
       console.error('クイズ取得エラー:', err);
@@ -77,10 +79,19 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
     const fetchQuizzes = async () => {
       try {
         setLoading(true);
-        console.log('Fetching quizzes with anonymousId:', anonymousId);
+        console.log('クイズデータを再取得中...');
+        console.log('使用するID:', anonymousId);
+        
+        // UUIDパターンを検出する正規表現
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        const isAuthenticated = uuidPattern.test(anonymousId);
+        
+        if (isAuthenticated) {
+          console.log("認証済みUUID形式のユーザーIDを検出: 全クイズにアクセス可能");
+        }
         
         // 匿名IDをクエリパラメータとして追加
-        const response = await fetch(`/api/quizzes?anonymousId=${encodeURIComponent(anonymousId)}`);
+        const response = await fetch(`/api/quizzes?anonymousId=${encodeURIComponent(anonymousId)}&isAuthenticated=${isAuthenticated}`);
         
         if (!response.ok) {
           const errorData = await response.json();
@@ -89,8 +100,26 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
         }
         
         const data = await response.json();
-        console.log(`Fetched ${data.length} quizzes`);
-        setQuizzes(data);
+        console.log(`${data.length}件のクイズを取得しました`);
+        
+        // クイズが0件の場合、UUID形式のIDでも直接全クイズにアクセスを試みる
+        if (data.length === 0 && uuidPattern.test(anonymousId)) {
+          console.log("クイズが0件: バックアップとして全クイズ取得を試行");
+          
+          // バックアップAPIコール - 無条件で全クイズを取得
+          const backupResponse = await fetch('/api/quizzes?getAllQuizzes=true');
+          
+          if (backupResponse.ok) {
+            const backupData = await backupResponse.json();
+            console.log(`バックアップ取得: ${backupData.length}件のクイズを取得`);
+            setQuizzes(backupData);
+          } else {
+            console.log("バックアップ取得も失敗");
+            setQuizzes(data); // 元の空の結果を使用
+          }
+        } else {
+          setQuizzes(data);
+        }
       } catch (err: any) {
         console.error('クイズ取得エラー:', err);
         setError('クイズの読み込みに失敗しました: ' + err.message);
