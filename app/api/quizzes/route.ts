@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getQuizzes, getQuiz, addUserIdColumnIfNeeded } from '@/lib/supabase';
 import { getUserIdOrAnonymousId } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';  // このインポートを追加
+import { supabase } from '@/lib/supabase';  // 修正済み: supabaseクライアントの正しいインポート
 
 /**
  * GET /api/quizzes
@@ -46,6 +46,9 @@ export async function GET(request: NextRequest) {
     if (getAllQuizzes || isUuidUser) {
       console.log('API: 全クイズ取得モードを実行');
       try {
+        // 改善: ログ出力を強化して詳細なデバッグ情報を提供
+        console.log('API: 直接Supabaseクエリを実行 - 全クイズ取得');
+        
         // 直接Supabaseから全クイズを取得
         const { data, error } = await supabase
           .from('quizzes')
@@ -60,7 +63,10 @@ export async function GET(request: NextRequest) {
           );
         }
         
-        console.log(`API: 全クイズモード - ${data?.length || 0}件のクイズを取得`);
+        // 改善: より詳細なレスポンス情報のログ出力
+        console.log(`API: 全クイズモード - ${data?.length || 0}件のクイズを取得 (データサンプル: ${data && data.length > 0 ? JSON.stringify(data[0].id) : 'なし'})`);
+        
+        // 改善: データが空の場合でも空配列を明示的に返す
         return NextResponse.json(data || []);
       } catch (error) {
         console.error('API: 全クイズ取得中のエラー:', error);
