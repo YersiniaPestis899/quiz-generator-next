@@ -1,54 +1,34 @@
-const USER_ID_COOKIE_NAME = 'quiz_generator_user_id';
-const COOKIE_EXPIRY_DAYS = 30;
+/**
+ * 注意: このクッキーユーティリティは非推奨となりました。
+ * 認証システムはGoogle OAuth認証のみを使用するように最適化されています。
+ * クッキーベースのユーザーID管理は使用しないでください。
+ */
 
+// 以下の関数は後方互換性のためだけに維持されています
+
+/**
+ * ユーザーIDをクッキーに保存（非推奨）
+ * @deprecated Google認証を優先的に使用してください
+ */
 export function saveUserIdToCookie(userId: string): void {
-  if (typeof document === 'undefined') return;
-  
-  try {
-    // クッキーの有効期限を設定（30日間）
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + COOKIE_EXPIRY_DAYS);
-    
-    // クッキー設定を最適化（SameSite=Laxに変更し、より良い互換性を確保）
-    document.cookie = `${USER_ID_COOKIE_NAME}=${userId}; expires=${expiryDate.toUTCString()}; path=/; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
-    
-    console.log('ユーザーIDをクッキーに保存しました:', userId);
-  } catch (error) {
-    console.error('クッキーへの保存に失敗しました:', error);
-  }
+  console.warn('警告: クッキーベースのユーザーID保存は非推奨です。Google認証を使用してください。');
+  // 実際には保存操作を行わない
 }
 
+/**
+ * クッキーからユーザーIDを取得（非推奨）
+ * @deprecated Google認証を優先的に使用してください
+ * @returns 常にnull
+ */
 export function getUserIdFromCookie(): string | null {
-  if (typeof document === 'undefined') return null;
-  
-  try {
-    const cookies = document.cookie.split(';');
-    for (let i = 0; i < cookies.length; i++) {
-      const cookie = cookies[i].trim();
-      if (cookie.startsWith(`${USER_ID_COOKIE_NAME}=`)) {
-        return cookie.substring(USER_ID_COOKIE_NAME.length + 1);
-      }
-    }
-    return null;
-  } catch (error) {
-    console.error('クッキーからの読み込みに失敗しました:', error);
-    return null;
-  }
+  console.warn('警告: クッキーベースのユーザーID取得は非推奨です。Google認証を使用してください。');
+  return null; // 常にnullを返す
 }
 
 /**
  * ユーザーIDのクッキーを削除
- * ログアウト時やセッション切り替え時に呼び出し
  */
 export function clearUserIdCookie(): void {
-  if (typeof document === 'undefined') return;
-  
-  try {
-    // 過去の日付を設定してクッキーを削除
-    document.cookie = `${USER_ID_COOKIE_NAME}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
-    
-    console.log('ユーザーIDのクッキーを削除しました');
-  } catch (error) {
-    console.error('クッキーの削除に失敗しました:', error);
-  }
+  // 実際には操作を行わない
+  console.log('クッキーベースのユーザーIDクリア操作は無効化されています');
 }

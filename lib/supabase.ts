@@ -85,14 +85,19 @@ if (typeof window !== 'undefined') {
  */
 export async function saveQuiz(quiz: Quiz) {
   try {
-    // ユーザーIDを取得（改善された方法）
+    // ユーザーIDを取得（改善された一貫性のある方法）
     const userId = await getUserIdOrAnonymousId();
     console.log('クイズ保存に使用するユーザーID:', userId);
     
-    // クイズオブジェクトにユーザーIDを追加
+    // 必須フィールドの整合性確認
     const quizWithUserId = {
       ...quiz,
-      user_id: userId
+      user_id: userId,
+      // 必須フィールドが不足している場合、デフォルト値を設定
+      user_answers: quiz.user_answers || {},
+      score: quiz.score || {},
+      // 保存時刻を更新
+      last_saved: new Date().toISOString()
     };
     
     console.log('Saving quiz to Supabase:', { id: quiz.id, title: quiz.title, userId });
@@ -113,9 +118,11 @@ export async function saveQuiz(quiz: Quiz) {
     try {
       const { data, error } = await supabase
         .from('quizzes')
-        .insert([quizWithUserId])
-        .select()
-        .single();
+        .upsert([quizWithUserId], {
+          onConflict: 'id',
+          ignoreDuplicates: false
+        })
+        .select();
       
       if (error) {
         console.error('Supabase保存エラー:', error);
@@ -124,7 +131,7 @@ export async function saveQuiz(quiz: Quiz) {
       }
       
       console.log('Supabaseにクイズを保存しました:', data);
-      return data;
+      return data[0] || quizWithUserId;
     } catch (supabaseError) {
       console.error('Supabase例外:', supabaseError);
       // すでにローカルとメモリに保存済みなので、そのデータを返す
@@ -147,7 +154,12 @@ export async function getQuizzes(userId?: string) {
     
     console.log('Fetching quizzes for user:', currentUserId);
     
+    // 認証済みユーザーかどうかの判断ロジック
+    const isAuthenticated = !currentUserId.startsWith('anon_');
+    console.log(`ユーザー認証状態: ${isAuthenticated ? '認証済み' : '匿名'}`)
+    
     try {
+      // Supabaseからクイズを取得
       const { data, error } = await supabase
         .from('quizzes')
         .select('*')
@@ -159,6 +171,30 @@ export async function getQuizzes(userId?: string) {
       }
       
       const supabaseQuizzes = data || [];
+      console.log(`Supabaseから ${supabaseQuizzes.length} 件のクイズを取得しました`);
+      
+      // 認証済みユーザーの場合は匿名IDのクイズも取得（データ移行考慮）
+      let additionalQuizzes: Quiz[] = [];
+      if (isAuthenticated && typeof window !== 'undefined') {
+        try {
+          // 古い匿名IDをローカルストレージから取得
+          const oldAnonymousId = localStorage.getItem('old_anonymous_id');
+          if (oldAnonymousId && oldAnonymousId.startsWith('anon_')) {
+            console.log('古い匿名IDでのクイズも取得:', oldAnonymousId);
+            const { data: anonData } = await supabase
+              .from('quizzes')
+              .select('*')
+              .eq('user_id', oldAnonymousId);
+              
+            if (anonData && anonData.length > 0) {
+              console.log(`古い匿名IDから ${anonData.length} 件のクイズを取得`);
+              additionalQuizzes = anonData;
+            }
+          }
+        } catch (e) {
+          console.error('追加クイズ取得エラー:', e);
+        }
+      }
       
       // ローカルストレージからも取得
       const localQuizzes = getQuizzesFromLocalStorage()
@@ -167,6 +203,7 @@ export async function getQuizzes(userId?: string) {
       // Supabaseから取得したクイズとローカルクイズとインメモリクイズを結合
       const allQuizzes = [
         ...supabaseQuizzes, 
+        ...additionalQuizzes,
         ...localQuizzes, 
         ...inMemoryQuizzes.filter(q => q.user_id === currentUserId)
       ];
@@ -183,6 +220,7 @@ export async function getQuizzes(userId?: string) {
         return dateB.getTime() - dateA.getTime();
       });
       
+      console.log(`合計 ${uniqueQuizzes.length} 件のクイズを返却`)
       return uniqueQuizzes;
     } catch (supabaseError) {
       console.error('Error fetching from Supabase:', supabaseError);
@@ -253,19 +291,30 @@ export async function getQuiz(id: string, userId?: string) {
     
     // 最後にSupabaseからクイズを取得
     try {
-      const { data: quiz, error } = await supabase
-        .from('quizzes')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
+      // 認証済みユーザーの場合、ユーザーIDに関わらず特定IDのクイズを取得（移行考慮）
+      const isAuthenticated = !currentUserId.startsWith('anon_');
+      
+      const { data: quiz, error } = isAuthenticated ?
+        // 認証済みユーザーは特定IDのクイズを取得
+        await supabase
+          .from('quizzes')
+          .select('*')
+          .eq('id', id)
+          .maybeSingle() :
+        // 匿名ユーザーは自分のクイズのみ取得
+        await supabase
+          .from('quizzes')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', currentUserId)
+          .maybeSingle();
       
       if (error) throw error;
       if (!quiz) return null; // クイズが見つからない
       
-      // 所有権チェック
-      if (quiz.user_id && quiz.user_id !== currentUserId) {
-        console.log(`Access denied: User ${currentUserId} attempted to access Supabase quiz ${id} owned by ${quiz.user_id}`);
-        return null; // アクセス拒否
+      // 認証済みユーザーの場合、所有権移行の必要性を確認
+      if (isAuthenticated && quiz.user_id && quiz.user_id.startsWith('anon_')) {
+        console.log(`このクイズは匿名ユーザー(${quiz.user_id})が所有しています。所有権移行を検討してください。`);
       }
       
       // 見つかったら、ローカルストレージにも保存しておく

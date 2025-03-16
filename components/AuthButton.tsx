@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
-import { getUserIdFromCookie } from '@/lib/cookieUtils';
 import { clearAnonymousId } from '@/lib/auth';
 
 /**
@@ -21,20 +20,17 @@ export default function AuthButton() {
       
       setMigrationStatus('pending');
       
-      // 匿名IDの取得（複数のソースから取得を試みる）
+      // 匿名IDの取得（ローカルストレージからのみ）
       const localStorageAnonymousId = localStorage.getItem('anonymousUserId');
-      const cookieAnonymousId = getUserIdFromCookie();
       
-      // 利用可能な最初の匿名IDを使用
-      const anonymousId = localStorageAnonymousId || cookieAnonymousId;
-      
-      if (!anonymousId || !anonymousId.startsWith('anon_') || anonymousId === user.id) {
+      if (!localStorageAnonymousId || !localStorageAnonymousId.startsWith('anon_') || localStorageAnonymousId === user.id) {
         // 匿名IDがない、または認証IDと同じ場合は移行不要
+        console.log('移行不要: 有効な匿名IDが見つかりません');
         setMigrationStatus('success');
         return;
       }
       
-      console.log('匿名データの移行を開始します:', anonymousId, '->', user.id);
+      console.log('匿名データの移行を開始:', localStorageAnonymousId, '->', user.id);
       
       // 移行処理のAPIコール
       const response = await fetch('/api/migrate-data', {
@@ -43,7 +39,7 @@ export default function AuthButton() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          anonymousId,
+          anonymousId: localStorageAnonymousId,
           userId: user.id,
         }),
       });
@@ -53,12 +49,20 @@ export default function AuthButton() {
         clearAnonymousId();
         console.log('匿名データの移行が完了しました');
         setMigrationStatus('success');
+        
+        // 明示的にローカルストレージに認証IDを保存
+        localStorage.setItem('anonymousUserId', user.id);
+        console.log('認証済みIDをローカルストレージに保存:', user.id);
       } else {
         console.error('匿名データの移行に失敗しました');
         setMigrationStatus('error');
+        
+        // エラーの詳細を取得
+        const errorData = await response.json();
+        console.error('移行エラー詳細:', errorData);
       }
     } catch (error) {
-      console.error('データ移行エラー:', error);
+      console.error('データ移行例外:', error);
       setMigrationStatus('error');
     }
   };
@@ -66,6 +70,7 @@ export default function AuthButton() {
   // ログイン直後に移行処理を実行
   useEffect(() => {
     if (user) {
+      console.log('ユーザー認証検出: データ移行を開始');
       migrateAnonymousData();
     }
   }, [user]);
@@ -86,7 +91,7 @@ export default function AuthButton() {
   const handleSignOut = async () => {
     try {
       setIsProcessing(true);
-      // ログアウト前に匿名IDをクリアして新しいセッションを開始
+      // ログアウト前に匿名IDをクリア
       clearAnonymousId();
       await signOut();
     } catch (error) {
