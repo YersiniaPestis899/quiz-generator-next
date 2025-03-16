@@ -60,6 +60,27 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
       contentInputRef.current.focus();
     }
   };
+  
+  /**
+   * クイズ生成完了時の通知機能
+   * クイズリスト更新のためのイベント発行
+   */
+  const notifyQuizGenerated = () => {
+    // カスタムイベントを発行
+    if (typeof window !== 'undefined') {
+      // グローバルカスタムイベント
+      const event = new Event('quizUpdated');
+      window.dispatchEvent(event);
+      
+      // ローカルストレージを使った通知も追加（タブ間の更新用）
+      try {
+        // タイムスタンプを保存して変更を通知
+        localStorage.setItem('quizzes_updated', new Date().toISOString());
+      } catch (e) {
+        console.error('ローカルストレージ更新エラー:', e);
+      }
+    }
+  };
 
   /**
    * フォーム送信ハンドラー
@@ -120,6 +141,11 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
         }
         
         const quiz = await response.json();
+        
+        // クイズ生成成功を通知
+        notifyQuizGenerated();
+        
+        // 親コンポーネントに通知
         onQuizGenerated(quiz);
         
         // フォームをリセット
@@ -146,6 +172,11 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
         }
         
         const quiz = await response.json();
+        
+        // クイズ生成成功を通知
+        notifyQuizGenerated();
+        
+        // 親コンポーネントに通知
         onQuizGenerated(quiz);
         
         // フォームをリセット
