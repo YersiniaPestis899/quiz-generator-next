@@ -20,17 +20,25 @@ export default function AuthButton() {
       
       setMigrationStatus('pending');
       
-      // 匿名IDの取得（ローカルストレージからのみ）
-      const localStorageAnonymousId = localStorage.getItem('anonymousUserId');
+      // 複数のソースから匿名IDを取得
+      const currentId = localStorage.getItem('anonymousUserId');
+      const oldAnonymousId = localStorage.getItem('old_anonymous_id');
       
-      if (!localStorageAnonymousId || !localStorageAnonymousId.startsWith('anon_') || localStorageAnonymousId === user.id) {
+      // 移行に使用する匿名ID：優先順位は古い匿名ID > 現在の匿名ID
+      const anonymousIdToMigrate = 
+        (oldAnonymousId && oldAnonymousId.startsWith('anon_')) ? 
+        oldAnonymousId : 
+        (currentId && currentId.startsWith('anon_') && currentId !== user.id) ? 
+        currentId : null;
+      
+      if (!anonymousIdToMigrate) {
         // 匿名IDがない、または認証IDと同じ場合は移行不要
         console.log('移行不要: 有効な匿名IDが見つかりません');
         setMigrationStatus('success');
         return;
       }
       
-      console.log('匿名データの移行を開始:', localStorageAnonymousId, '->', user.id);
+      console.log('匿名データの移行を開始:', anonymousIdToMigrate, '->', user.id);
       
       // 移行処理のAPIコール
       const response = await fetch('/api/migrate-data', {
@@ -39,13 +47,14 @@ export default function AuthButton() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          anonymousId: localStorageAnonymousId,
+          anonymousId: anonymousIdToMigrate,
           userId: user.id,
         }),
       });
       
       if (response.ok) {
         // 移行成功後、匿名IDをクリア
+        localStorage.removeItem('old_anonymous_id'); // 古い匿名IDも削除
         clearAnonymousId();
         console.log('匿名データの移行が完了しました');
         setMigrationStatus('success');
@@ -78,6 +87,19 @@ export default function AuthButton() {
   // ログイン処理
   const handleSignIn = async () => {
     try {
+      // ログイン前に現在の匿名IDを保存
+      if (typeof window !== 'undefined') {
+        try {
+          const currentId = localStorage.getItem('anonymousUserId');
+          if (currentId && currentId.startsWith('anon_')) {
+            localStorage.setItem('old_anonymous_id', currentId);
+            console.log('ログイン前に旧匿名IDを保存:', currentId);
+          }
+        } catch (e) {
+          console.error('ローカルストレージアクセスエラー:', e);
+        }
+      }
+      
       setIsProcessing(true);
       await signInWithGoogle();
     } catch (error) {
