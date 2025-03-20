@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Quiz } from '@/lib/types';
 import { playButtonClickSound } from '@/lib/soundGenerator';
-import { useAuth } from '@/lib/AuthContext';
+import { useAnonymous } from '@/lib/AnonymousContext';
 
 interface QuizListProps {
   onSelectQuiz: (quiz: Quiz) => void;
@@ -11,17 +11,16 @@ interface QuizListProps {
 
 /**
  * クイズリストコンポーネント
- * 保存されたクイズの一覧を表示
+ * 保存されたクイズの一覧を表示 - 匿名認証方式
  */
 export default function QuizList({ onSelectQuiz }: QuizListProps) {
-  const { user, isLoading: authLoading } = useAuth(); // 認証コンテキストを使用
+  const { anonymousId, isLoading: anonymousLoading } = useAnonymous(); // 匿名コンテキストを使用
   const [personalQuizzes, setPersonalQuizzes] = useState<Quiz[]>([]);
   const [communityQuizzes, setCommunityQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingCommunity, setLoadingCommunity] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [communityError, setCommunityError] = useState<string | null>(null);
-  const [anonymousId, setAnonymousId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'personal' | 'community'>('personal');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -32,30 +31,6 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
     'medium': '普通',
     'hard': '難しい'
   };
-
-  // コンポーネントマウント時にローカルストレージから匿名IDを取得
-  useEffect(() => {
-    try {
-      // ブラウザの環境でのみ実行
-      if (typeof window !== 'undefined') {
-        const storedAnonymousId = localStorage.getItem('anonymousUserId');
-        if (storedAnonymousId) {
-          console.log('Retrieved anonymousId from localStorage:', storedAnonymousId);
-          setAnonymousId(storedAnonymousId);
-        } else {
-          // 新規匿名IDを生成して保存
-          const newAnonymousId = `anon_${Math.random().toString(36).substring(2, 15)}`;
-          console.log('Generated new anonymousId:', newAnonymousId);
-          localStorage.setItem('anonymousUserId', newAnonymousId);
-          setAnonymousId(newAnonymousId);
-        }
-      }
-    } catch (err) {
-      console.error('Error handling localStorage:', err);
-      // localStorage関連のエラーは無視して通常のフェッチを試みる
-      fetchQuizzesWithoutAnonymousId();
-    }
-  }, []);
 
   // 匿名IDがない場合の通常フェッチ
   const fetchQuizzesWithoutAnonymousId = async () => {
@@ -87,10 +62,8 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
       let url = '/api/quizzes';
       const params: string[] = [];
       
-      // 認証済みユーザーIDを優先し、次に匿名IDを使用
-      if (user) {
-        params.push(`userId=${encodeURIComponent(user.id)}`);
-      } else if (anonymousId) {
+      // 匿名IDがあれば使用
+      if (anonymousId) {
         params.push(`anonymousId=${encodeURIComponent(anonymousId)}`);
       }
       
@@ -201,13 +174,13 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
     }
   };
 
-  // 認証状態や匿名IDが変更されたときにクイズを再取得
+  // 匿名IDが変更されたときにクイズを再取得
   useEffect(() => {
-    // 認証状態のロード完了＋IDが利用可能な状態でフェッチ
-    if (!authLoading && (user || anonymousId)) {
+    // 匿名IDのロード完了＋IDが利用可能な状態でフェッチ
+    if (!anonymousLoading && anonymousId) {
       fetchPersonalQuizzes();
     }
-  }, [user, anonymousId, authLoading]); // userを依存配列に追加
+  }, [anonymousId, anonymousLoading]);
   
   // 表示するクイズデータの選択
   const activeQuizzes = activeTab === 'personal' ? personalQuizzes : communityQuizzes;
