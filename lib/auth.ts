@@ -1,77 +1,30 @@
-import { supabase } from './supabase';
-import { getUserIdFromCookie, saveUserIdToCookie, clearUserIdCookie } from './cookieUtils';
+import { getUserIdFromCookie, saveUserIdToCookie } from './cookieUtils';
 
 /**
- * 現在の認証済みセッションのユーザーIDを取得
- * 認証済みの場合のみユーザーIDを返し、それ以外はnullを返す
- * @returns 認証済みユーザーIDまたはnull
+ * セッションの匿名ユーザー識別子を取得
+ * 優先順位: ローカルストレージ > クッキー > 新規生成
  */
-async function getCurrentUserId() {
+export async function getUserIdOrAnonymousId(): Promise<string> {
   try {
-    const { data, error } = await supabase.auth.getSession();
-    
-    if (error || !data.session) {
-      return null;
-    }
-    
-    return data.session.user.id;
-  } catch (error) {
-    console.error('認証セッション取得エラー:', error);
-    return null;
-  }
-}
-
-/**
- * 認証済みユーザーIDのみを取得する単純化関数
- * 匿名ユーザー識別は行わない - 認証済みユーザーのみサポート
- */
-async function getUserId() {
-  try {
-    // 認証済みセッションからのみIDを取得
-    const userId = await getCurrentUserId();
-    if (userId) {
-      console.log('認証済みユーザーID:', userId);
-      return userId;
-    }
-    
-    // 認証されていない場合はnullを返す
-    console.log('認証されていないユーザー - 機能制限あり');
-    return null;
-  } catch (error) {
-    console.error('ユーザーID取得エラー:', error);
-    return null;
-  }
-}
-
-/**
- * セッションのユーザーID、または匿名ユーザー識別子を取得
- * 認証していない場合はクッキーやローカルストレージに保存されたID、
- * またはランダムIDを生成して返す
- * ユーザー識別の優先順位: 認証済みセッション > クッキー > ローカルストレージ > 新規生成
- */
-// Explicitly define the function and then export it to avoid potential issues
-const getUserIdOrAnonymousId = async () => {
-  try {
-    // まず認証済みセッションを確認（最優先）
-    const userId = await getCurrentUserId();
-    if (userId) {
-      console.log('認証セッションからユーザーIDを取得:', userId);
-      // 認証済みIDをクッキーとローカルストレージに保存して同期
-      saveUserIdToCookie(userId);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('anonymousUserId', userId);
-        } catch (e) {
-          console.error('ローカルストレージへの保存に失敗:', e);
+    // まずローカルストレージを確認
+    if (typeof window !== 'undefined') {
+      try {
+        const storageUserId = localStorage.getItem('anonymousUserId');
+        if (storageUserId) {
+          console.log('ローカルストレージから匿名IDを取得:', storageUserId);
+          // クッキーにも保存して一貫性を確保
+          saveUserIdToCookie(storageUserId);
+          return storageUserId;
         }
+      } catch (e) {
+        console.error('ローカルストレージアクセスエラー:', e);
       }
-      return userId;
     }
     
     // 次にクッキーを確認
     const cookieUserId = getUserIdFromCookie();
     if (cookieUserId) {
-      console.log('クッキーからユーザーIDを取得:', cookieUserId);
+      console.log('クッキーから匿名IDを取得:', cookieUserId);
       // ローカルストレージにも同期して一貫性を確保
       if (typeof window !== 'undefined') {
         try {
@@ -83,24 +36,9 @@ const getUserIdOrAnonymousId = async () => {
       return cookieUserId;
     }
     
-    // 次にローカルストレージを確認
-    if (typeof window !== 'undefined') {
-      try {
-        const storageUserId = localStorage.getItem('anonymousUserId');
-        if (storageUserId) {
-          console.log('ローカルストレージからユーザーIDを取得:', storageUserId);
-          // クッキーにも保存して一貫性を確保
-          saveUserIdToCookie(storageUserId);
-          return storageUserId;
-        }
-      } catch (e) {
-        console.error('ローカルストレージアクセスエラー:', e);
-      }
-    }
-    
     // 新規ID生成（両方の保存先に保存）
     const newUserId = `anon_${Math.random().toString(36).substring(2, 15)}`;
-    console.log('新規ユーザーIDを生成:', newUserId);
+    console.log('新規匿名IDを生成:', newUserId);
     
     if (typeof window !== 'undefined') {
       try {
@@ -115,87 +53,18 @@ const getUserIdOrAnonymousId = async () => {
   } catch (error) {
     console.error('Error in getUserIdOrAnonymousId:', error);
     // エラー発生時も一時的なIDを返す
-    const tempId = `anon_error_${Math.random().toString(36).substring(2, 15)}`;
+    const tempId = `anon_${Math.random().toString(36).substring(2, 15)}`;
     return tempId;
   }
 }
 
 /**
- * 認証状態を確認し、認証済みの場合はtrueを返す
- * @returns 認証状態のブール値
+ * ユーザーIDを取得する単純化関数
+ * 匿名ユーザー識別のみをサポート
  */
-async function isAuthenticated() {
-  const userId = await getCurrentUserId();
-  return !!userId;
+export async function getUserId(): Promise<string> {
+  return getUserIdOrAnonymousId();
 }
 
-/**
- * 化名ユーザーIDをクリアする関数
- * AuthContextから呼び出される
- */
-function clearAnonymousId() {
-  console.log('化名ユーザーIDクリアプロセスを開始...');
-  try {
-    if (typeof window !== 'undefined') {
-      // 元の化名IDを保管しておく
-      const currentId = localStorage.getItem('anonymousUserId');
-      if (currentId && currentId.startsWith('anon_')) {
-        localStorage.setItem('old_anonymous_id', currentId);
-        console.log('化名IDをバックアップとして保存:', currentId);
-      }
-      
-      // ローカルストレージからの化名データ削除
-      localStorage.removeItem('anonymousUserId');
-      console.log('化名ユーザーIDを削除しました');
-    }
-    // クッキーの削除
-    clearUserIdCookie();
-    console.log('化名ユーザーIDが正常にクリアされました');
-  } catch (error) {
-    console.error('化名IDクリア中のエラー:', error);
-  }
-  return true;
-}
-
-/**
- * 認証関連の状態をクリア
- * ログアウト時に呼び出す
- */
-function clearAuthState() {
-  console.log('認証状態クリアプロセスを実行中...');
-  try {
-    if (typeof window !== 'undefined') {
-      // ローカルストレージからの認証関連データ削除
-      localStorage.removeItem('anonymousUserId');
-      localStorage.removeItem('old_anonymous_id');
-      console.log('認証関連のローカルストレージデータを削除しました');
-    }
-    // クッキーの削除
-    clearUserIdCookie();
-  } catch (error) {
-    console.error('認証状態クリア中のエラー:', error);
-  }
-}
-
-// Create a single consolidated export to avoid duplication
-const auth = {
-  getCurrentUserId,
-  getUserId,
-  getUserIdOrAnonymousId,
-  isAuthenticated,
-  clearAuthState,
-  clearAnonymousId
-};
-
-// Only export once via named exports
-export { 
-  getCurrentUserId,
-  getUserId,
-  getUserIdOrAnonymousId,
-  isAuthenticated,
-  clearAuthState,
-  clearAnonymousId
-};
-
-// Also provide a default export for flexibility
-export default auth;
+// シンプル化されたエクスポート
+export default { getUserIdOrAnonymousId, getUserId };

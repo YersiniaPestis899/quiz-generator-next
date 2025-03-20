@@ -84,7 +84,7 @@ if (typeof window !== 'undefined') {
  */
 export async function saveQuiz(quiz: Quiz) {
   try {
-    // ユーザーIDを取得
+    // 匿名IDを取得
     const userId = await getUserIdOrAnonymousId();
     
     // クイズオブジェクトにユーザーIDを追加
@@ -121,9 +121,10 @@ export async function saveQuiz(quiz: Quiz) {
     console.error('Exception saving quiz:', error);
     
     // 例外発生時もインメモリストレージに保存
+    const anonymousId = await getUserIdOrAnonymousId();
     inMemoryQuizzes.push({
       ...quiz,
-      user_id: await getUserIdOrAnonymousId()
+      user_id: anonymousId
     });
     
     return quiz;
@@ -141,9 +142,8 @@ export async function getQuizzes(userId?: string) {
     
     console.log('Fetching quizzes for user:', currentUserId);
     
-    // これが認証済みユーザーか判断
-    const isAuthenticated = currentUserId && !currentUserId.startsWith('anon_');
-    console.log(`ユーザー認証状態: ${isAuthenticated ? '認証済み' : '匿名'}`)
+    // 匿名IDかどうかを判断（すべて匿名IDになるため、ここは単に記録用）
+    console.log(`ユーザー認証状態: 匿名`);
     
     try {
       // ユーザーのクイズを取得する基本クエリ
@@ -160,29 +160,6 @@ export async function getQuizzes(userId?: string) {
       const supabaseQuizzes = data || [];
       console.log(`ユーザー ${currentUserId} のクイズを ${supabaseQuizzes.length} 件取得しました`);
       
-      // 認証済みユーザーの場合、以前の匿名IDのクイズも取得
-      let additionalQuizzes: Quiz[] = [];
-      if (isAuthenticated && typeof window !== 'undefined') {
-        try {
-          // 古い匿名IDをローカルストレージから取得
-          const oldAnonymousId = localStorage.getItem('old_anonymous_id');
-          if (oldAnonymousId && oldAnonymousId.startsWith('anon_')) {
-            console.log('古い匿名IDでのクイズも取得:', oldAnonymousId);
-            const { data: anonData } = await supabase
-              .from('quizzes')
-              .select('*')
-              .eq('user_id', oldAnonymousId);
-              
-            if (anonData && anonData.length > 0) {
-              console.log(`古い匿名IDから ${anonData.length} 件のクイズを取得`);
-              additionalQuizzes = anonData;
-            }
-          }
-        } catch (e) {
-          console.error('追加クイズ取得エラー:', e);
-        }
-      }
-      
       // ローカルストレージからも取得
       const localQuizzes = getQuizzesFromLocalStorage()
         .filter(q => q.user_id === currentUserId);
@@ -190,7 +167,6 @@ export async function getQuizzes(userId?: string) {
       // Supabaseから取得したクイズとローカルクイズとインメモリクイズを結合
       const allQuizzes = [
         ...supabaseQuizzes, 
-        ...additionalQuizzes,
         ...localQuizzes, 
         ...inMemoryQuizzes.filter(q => q.user_id === currentUserId)
       ];
@@ -257,10 +233,9 @@ export async function getQuiz(id: string, userId?: string) {
     const localQuizzes = getQuizzesFromLocalStorage();
     const localQuiz = localQuizzes.find(q => q.id === id);
     if (localQuiz) {
-      // 所有権チェック
+      // 所有権チェック - 匿名モードでは緩和（コミュニティクイズの場合など）
       if (localQuiz.user_id && localQuiz.user_id !== currentUserId) {
-        console.log(`Access denied: User ${currentUserId} attempted to access local quiz ${id} owned by ${localQuiz.user_id}`);
-        return null; // アクセス拒否
+        console.log(`Different owner, but allowing access: User ${currentUserId} accessing quiz ${id} owned by ${localQuiz.user_id}`);
       }
       return localQuiz;
     }
@@ -268,10 +243,9 @@ export async function getQuiz(id: string, userId?: string) {
     // 次にインメモリストレージから検索
     const memoryQuiz = inMemoryQuizzes.find(q => q.id === id);
     if (memoryQuiz) {
-      // 所有権チェック
+      // 所有権チェック - 匿名モードでは緩和
       if (memoryQuiz.user_id && memoryQuiz.user_id !== currentUserId) {
-        console.log(`Access denied: User ${currentUserId} attempted to access memory quiz ${id} owned by ${memoryQuiz.user_id}`);
-        return null; // アクセス拒否
+        console.log(`Different owner, but allowing access: User ${currentUserId} accessing quiz ${id} owned by ${memoryQuiz.user_id}`);
       }
       return memoryQuiz;
     }
@@ -287,10 +261,9 @@ export async function getQuiz(id: string, userId?: string) {
       if (error) throw error;
       if (!quiz) return null; // クイズが見つからない
       
-      // 所有権チェック
+      // 所有権チェック - 匿名モードでは緩和
       if (quiz.user_id && quiz.user_id !== currentUserId) {
-        console.log(`Access denied: User ${currentUserId} attempted to access Supabase quiz ${id} owned by ${quiz.user_id}`);
-        return null; // アクセス拒否
+        console.log(`Different owner, but allowing access: User ${currentUserId} accessing quiz ${id} owned by ${quiz.user_id}`);
       }
       
       // 見つかったら、ローカルストレージにも保存しておく
@@ -324,6 +297,7 @@ export async function addUserIdColumnIfNeeded() {
 
 /**
  * 他のユーザーが作成したコミュニティクイズを取得する関数
+ * - 匿名モードでは現在の匿名ID以外のすべてのクイズを返す
  * @param titleSearch - タイトル検索キーワード（オプション）
  */
 export async function getCommunityQuizzes(titleSearch?: string): Promise<Quiz[]> {
@@ -333,12 +307,11 @@ export async function getCommunityQuizzes(titleSearch?: string): Promise<Quiz[]>
     // 現在のユーザーIDを取得（自分以外のクイズを取得するため）
     const currentUserId = await getUserIdOrAnonymousId();
     
-    // クエリの構築
+    // クエリの構築 - 匿名モードでもすべてのクイズを表示
     let query = supabase
       .from('quizzes')
       .select('*')
-      .neq('user_id', currentUserId) // 自分以外のクイズ
-      .not('user_id', 'like', 'anon_%'); // 匿名ユーザーのクイズは除外
+      .neq('user_id', currentUserId); // 自分以外のクイズ
       
     // 検索条件があれば追加
     if (titleSearch && titleSearch.trim() !== '') {

@@ -2,7 +2,7 @@ import './globals.css';
 import './gameshow.css';
 import type { Metadata } from 'next';
 import GameshowHeader from '@/components/GameshowHeader';
-import { AuthProvider } from '@/lib/AuthContext';
+import { AnonymousProvider } from '@/lib/AnonymousContext';
 import { EnvProvider } from './EnvProvider';
 
 export const metadata: Metadata = {
@@ -21,12 +21,12 @@ export default function RootLayout({
         <EnvProvider />
       </head>
       <body className="bg-background text-text min-h-screen">
-        <AuthProvider>
+        <AnonymousProvider>
           <GameshowHeader />
           <div className="content-wrapper min-h-[calc(100vh-150px)]">
             {children}
           </div>
-        </AuthProvider>
+        </AnonymousProvider>
       </body>
     </html>
   );
