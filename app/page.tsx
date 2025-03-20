@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import ContentUploader from '@/components/ContentUploader';
 import QuizDisplay from '@/components/QuizDisplay';
 import QuizList from '@/components/QuizList';
@@ -12,12 +12,32 @@ export default function Home() {
   const quizDisplayRef = useRef<HTMLDivElement>(null);
   // 状態変数でリロードトリガーを管理
   const [forceReload, setForceReload] = useState(0);
+  // 更新要求フラグ
+  const [refreshRequested, setRefreshRequested] = useState(false);
+  
+  // 更新要求を監視して処理を実行
+  useEffect(() => {
+    if (refreshRequested) {
+      console.log('クイズリストの更新を実行中...');
+      // 最新のクイズを取得するための他の処理が必要な場合はここに追加
+    }
+  }, [refreshRequested]);
   
   // クイズリストを更新する関数
   const refreshQuizList = useCallback(() => {
-    console.log('クイズリスト強制リロードをトリガー');
-    // 強制リロードをトリガー
+    console.log('クイズリスト更新をリクエスト');
+    // 更新要求フラグをセット
+    setRefreshRequested(true);
+    // フォールバックとして強制リロードも実行
     setForceReload(prev => prev + 1);
+    // 1秒後にリセットして将来のトリガーも可能に
+    setTimeout(() => setRefreshRequested(false), 1000);
+  }, []);
+  
+  // 更新要求が完了したことを示すコールバック
+  const handleRefreshComplete = useCallback(() => {
+    console.log('クイズリスト更新完了');
+    setRefreshRequested(false);
   }, []);
   
   // クイズ選択時に表示エリアにスクロールする関数
@@ -49,10 +69,11 @@ export default function Home() {
             </div>
           </div>
           <div className="lg:w-3/5 xl:w-2/3">
-          <QuizList 
-          key={forceReload} // キーを変更してリロードを強制
-          onSelectQuiz={handleQuizSelect} 
-          />
+            <QuizList 
+              key={forceReload} // キーを変更してリロードを強制
+              onSelectQuiz={handleQuizSelect} 
+              onRefreshRequest={refreshRequested ? handleRefreshComplete : undefined}
+            />
             <div ref={quizDisplayRef} className="mt-6">
               {activeQuiz ? (
                 <div className="quiz-container p-1">

@@ -110,15 +110,16 @@ export default function QuizList({ onSelectQuiz, onRefreshRequest }: QuizListPro
     );
   }
   
-  // 更新リクエストハンドラー - 外部からの更新指示を処理
+  // 更新リクエストハンドラープロパティが指定されている場合のハンドリング
+  // 注: useEffectの外で定義し、依存関係配列に正しく含める
   useEffect(() => {
+    // onRefreshRequestプロパティが存在する場合のみその内部でfetchQuizzesを呼び出す
+    // ここではonRefreshRequestプロパティ自体を変更しようとしない
     if (onRefreshRequest) {
-      onRefreshRequest = () => {
-        console.log('クイズリスト更新リクエストハンドラー');
-        fetchQuizzes();
-      };
+      console.log('クイズリストでonRefreshRequestを検出しました');
+      fetchQuizzes();
     }
-  }, []);
+  }, [onRefreshRequest]); // onRefreshRequestを依存配列に追加
 
   return (
     <div className="card">
