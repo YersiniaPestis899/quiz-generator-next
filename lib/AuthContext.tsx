@@ -64,15 +64,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Google認証でのサインイン
   const signInWithGoogle = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      console.log('認証フロー開始: Google OAuth');
+      
+      // カレントオリジンを確認
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const redirectUrl = `${origin}/auth/callback`;
+      
+      console.log('認証リダイレクトURL:', redirectUrl);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
+          queryParams: {
+            // オプションで追加パラメータを指定可能
+            // access_type: 'offline', // リフレッシュトークンを取得する場合
+            prompt: 'select_account',  // 常にアカウント選択を表示
+          }
         },
       });
       
       if (error) {
         console.error('Google認証エラー:', error);
+      } else if (data?.url) {
+        console.log('認証プロバイダーへのリダイレクトURL:', data.url);
+        // プロバイダーURLへのリダイレクトを手動で実行
+        window.location.href = data.url;
+      } else {
+        console.error('認証データが不完全です:', data);
       }
     } catch (err) {
       console.error('認証処理エラー:', err);

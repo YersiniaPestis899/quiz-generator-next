@@ -8,17 +8,23 @@ import AuthButton from '@/components/AuthButton';
 // クライアントサイドのみで実行されるエラーハンドリングコンポーネント
 function ErrorParamHandler() {
   const [error, setError] = useState<string | null>(null);
+  const [details, setDetails] = useState<string | null>(null);
   
-  // クライアントサイドでのみwindow.locationを使用
+  // クライアントサイドでのみ window.location を使用
   useEffect(() => {
     // URLからエラーパラメータを直接取得
     const urlParams = new URLSearchParams(window.location.search);
     const errorParam = urlParams.get('error');
+    const errorDetails = urlParams.get('details');
+    
+    if (errorDetails) {
+      setDetails(decodeURIComponent(errorDetails));
+    }
     
     if (errorParam) {
       switch (errorParam) {
         case 'missing_code':
-          setError('認証コードが見つかりませんでした。もう一度お試しください。');
+          setError('認証コードが見つかりませんでした。ブラウザの Cookie 設定を確認してください。');
           break;
         case 'auth_failed':
           setError('認証処理に失敗しました。もう一度お試しください。');
@@ -26,9 +32,18 @@ function ErrorParamHandler() {
         case 'provider_error':
           setError('Google認証サービスとの通信に問題が発生しました。');
           break;
+        case 'session_error':
+          setError('セッションの確立に失敗しました。クッキーが有効か確認してください。');
+          break;
         default:
           setError('認証中にエラーが発生しました。もう一度お試しください。');
       }
+      
+      // エラーパラメータをURLから削除
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('error');
+      cleanUrl.searchParams.delete('details');
+      window.history.replaceState({}, '', cleanUrl.toString());
     }
   }, []);
   
@@ -36,7 +51,10 @@ function ErrorParamHandler() {
   
   return (
     <div className="mb-4 p-3 bg-red-900/30 text-red-300 border border-red-500/30 rounded-lg text-center">
-      <p className="text-sm">{error}</p>
+      <p className="text-sm font-semibold">{error}</p>
+      {details && (
+        <p className="text-xs mt-1 opacity-80">詳細: {details}</p>
+      )}
     </div>
   );
 }
