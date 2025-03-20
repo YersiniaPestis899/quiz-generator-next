@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import ContentUploader from '@/components/ContentUploader';
 import QuizDisplay from '@/components/QuizDisplay';
 import QuizList from '@/components/QuizList';
@@ -10,34 +10,14 @@ import { Quiz } from '@/lib/types';
 export default function Home() {
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const quizDisplayRef = useRef<HTMLDivElement>(null);
-  // 状態変数でリロードトリガーを管理
-  const [forceReload, setForceReload] = useState(0);
-  // 更新要求フラグ
-  const [refreshRequested, setRefreshRequested] = useState(false);
+  // 状態変数でリロードトリガーを管理（カウンターパターン）
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   
-  // 更新要求を監視して処理を実行
-  useEffect(() => {
-    if (refreshRequested) {
-      console.log('クイズリストの更新を実行中...');
-      // 最新のクイズを取得するための他の処理が必要な場合はここに追加
-    }
-  }, [refreshRequested]);
-  
-  // クイズリストを更新する関数
+  // クイズリストを更新する関数 - シンプルな設計
   const refreshQuizList = useCallback(() => {
-    console.log('クイズリスト更新をリクエスト');
-    // 更新要求フラグをセット
-    setRefreshRequested(true);
-    // フォールバックとして強制リロードも実行
-    setForceReload(prev => prev + 1);
-    // 1秒後にリセットして将来のトリガーも可能に
-    setTimeout(() => setRefreshRequested(false), 1000);
-  }, []);
-  
-  // 更新要求が完了したことを示すコールバック
-  const handleRefreshComplete = useCallback(() => {
-    console.log('クイズリスト更新完了');
-    setRefreshRequested(false);
+    console.log('クイズリスト更新をトリガー');
+    // カウンターをインクリメントして更新を強制
+    setRefreshTrigger(prev => prev + 1);
   }, []);
   
   // クイズ選択時に表示エリアにスクロールする関数
@@ -70,9 +50,8 @@ export default function Home() {
           </div>
           <div className="lg:w-3/5 xl:w-2/3">
             <QuizList 
-              key={forceReload} // キーを変更してリロードを強制
+              triggerRefresh={refreshTrigger}
               onSelectQuiz={handleQuizSelect} 
-              onRefreshRequest={refreshRequested ? handleRefreshComplete : undefined}
             />
             <div ref={quizDisplayRef} className="mt-6">
               {activeQuiz ? (

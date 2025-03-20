@@ -1,29 +1,20 @@
 'use client';
 
-import { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Quiz } from '@/lib/types';
 import { playButtonClickSound } from '@/lib/soundGenerator';
 import { useAnonymous } from '@/lib/AnonymousContext';
 
 interface QuizListProps {
   onSelectQuiz: (quiz: Quiz) => void;
-  onRefreshRequest?: () => void; // 更新要求があったときに呼び出されるコールバック
+  triggerRefresh?: number; // 外部からの再読み込みトリガー
 }
 
 /**
  * クイズリストコンポーネント - 簡素化版
- * 単一リストでクイズを表示（タブなし）
+ * 単一リストでクイズを表示
  */
-// 注: refを使用せず、propsベースでリスト更新を実装
-
-// 外部から更新をトリガーするための関数を公開
-export function refreshQuizList(callback: () => void) {
-  if (callback) {
-    callback();
-  }
-}
-
-export default function QuizList({ onSelectQuiz, onRefreshRequest }: QuizListProps) {
+export default function QuizList({ onSelectQuiz, triggerRefresh = 0 }: QuizListProps) {
   const { anonymousId } = useAnonymous();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +31,7 @@ export default function QuizList({ onSelectQuiz, onRefreshRequest }: QuizListPro
 
   // クイズ取得関数 - すべてのクイズを取得
   const fetchQuizzes = async (search?: string) => {
-    console.log('クイズリストのfetchQuizzesが呼び出されました', search);
+    console.log('クイズ取得関数実行', search);
     try {
       setLoading(true);
       setError(null);
@@ -82,13 +73,21 @@ export default function QuizList({ onSelectQuiz, onRefreshRequest }: QuizListPro
     fetchQuizzes(searchQuery);
   };
 
-  // 初回マウント時とanonymousId変更時にクイズを取得
+  // 初回マウント時のデータ取得
   useEffect(() => {
-    console.log('クイズリスト useEffect 発火', { anonymousId });
     if (anonymousId) {
+      console.log('初期クイズ取得を実行');
       fetchQuizzes();
     }
   }, [anonymousId]);
+  
+  // triggerRefresh値が変更されたときにデータ再取得
+  useEffect(() => {
+    if (triggerRefresh > 0 && anonymousId) {
+      console.log('外部トリガーによるクイズ再取得', { triggerRefresh });
+      fetchQuizzes();
+    }
+  }, [triggerRefresh, anonymousId]);
   
   // ローディング表示
   if (loading) {
@@ -110,17 +109,6 @@ export default function QuizList({ onSelectQuiz, onRefreshRequest }: QuizListPro
     );
   }
   
-  // 更新リクエストハンドラープロパティが指定されている場合のハンドリング
-  // 注: useEffectの外で定義し、依存関係配列に正しく含める
-  useEffect(() => {
-    // onRefreshRequestプロパティが存在する場合のみその内部でfetchQuizzesを呼び出す
-    // ここではonRefreshRequestプロパティ自体を変更しようとしない
-    if (onRefreshRequest) {
-      console.log('クイズリストでonRefreshRequestを検出しました');
-      fetchQuizzes();
-    }
-  }, [onRefreshRequest]); // onRefreshRequestを依存配列に追加
-
   return (
     <div className="card">
       {/* 検索UI */}
