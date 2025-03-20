@@ -84,8 +84,29 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || '似たようなクイズの生成に失敗しました');
+        let errorMessage = '似たようなクイズの生成に失敗しました';
+        
+        try {
+          // レスポンスがJSON形式か確認して解析
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+          } else {
+            // JSONでない場合はテキストとして読み取る
+            const textError = await response.text();
+            console.error('非JSONエラーレスポンス:', textError.substring(0, 150) + '...');
+            // タイムアウトエラーか確認
+            if (response.status === 504 || textError.includes('timeout') || textError.includes('Timeout')) {
+              errorMessage = 'タイムアウトエラー: クイズ生成が時間切れで失敗しました。もう一度お試しください。';
+            }
+          }
+        } catch (parseError) {
+          // JSON解析エラーの場合はデフォルトメッセージを使用
+          console.error('レスポンス解析エラー:', parseError);
+        }
+        
+        throw new Error(errorMessage);
       }
       
       // 生成された新しいクイズを取得
