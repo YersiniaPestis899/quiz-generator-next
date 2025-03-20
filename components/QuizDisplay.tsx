@@ -42,6 +42,8 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
   // ポーリング関連の状態
   const [jobId, setJobId] = useState<string | null>(null);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [pollingRetries, setPollingRetries] = useState(0); // 再試行カウンタ
+  const [pollingBackoff, setPollingBackoff] = useState(3000); // バックオフ間隔(ミリ秒)
   
   /**
    * ジョブの状態を定期的に確認するポーリング処理
