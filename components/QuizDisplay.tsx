@@ -8,13 +8,14 @@ import ExpandableAnswerExplanation from './ExpandableAnswerExplanation';
 
 interface QuizDisplayProps {
   quiz: Quiz;
+  onQuizSaved?: () => void; // クイズ保存後に呼び出されるコールバック
 }
 
 /**
  * クイズ表示コンポーネント
  * クイズの問題と回答オプションを表示し、ユーザーの回答を追跡
  */
-export default function QuizDisplay({ quiz }: QuizDisplayProps) {
+export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
@@ -73,6 +74,11 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
         text: 'クイズを保存しました',
         type: 'success'
       });
+      
+      // クイズリストを更新するため、保存完了を通知
+      if (onQuizSaved) {
+        onQuizSaved();
+      }
       
       // 3秒後にメッセージを消す
       setTimeout(() => {

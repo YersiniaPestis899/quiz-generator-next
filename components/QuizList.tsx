@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Quiz } from '@/lib/types';
 import { playButtonClickSound } from '@/lib/soundGenerator';
 import { useAnonymous } from '@/lib/AnonymousContext';
@@ -13,7 +13,12 @@ interface QuizListProps {
  * クイズリストコンポーネント - 簡素化版
  * 単一リストでクイズを表示（タブなし）
  */
-export default function QuizList({ onSelectQuiz }: QuizListProps) {
+// 外部から参照できるメソッドの型定義
+export interface QuizListHandle {
+  fetchQuizzes: (search?: string) => Promise<void>;
+}
+
+const QuizList = forwardRef<QuizListHandle, QuizListProps>(({ onSelectQuiz }, ref) => {
   const { anonymousId } = useAnonymous();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +103,11 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
     );
   }
   
+  // 外部から fetchQuizzes を呼び出せるようにする
+  useImperativeHandle(ref, () => ({
+    fetchQuizzes
+  }));
+
   return (
     <div className="card">
       {/* 検索UI */}
@@ -156,4 +166,6 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
       )}
     </div>
   );
-}
+});
+
+export default QuizList;

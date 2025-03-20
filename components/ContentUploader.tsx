@@ -7,13 +7,14 @@ import ContentSuggestions from './ContentSuggestions';
 
 interface ContentUploaderProps {
   onQuizGenerated: (quiz: Quiz) => void;
+  onQuizSaved?: () => void; // 保存成功時のコールバック(オプショナル)
 }
 
 /**
  * コンテンツアップローダーコンポーネント
  * 教育コンテンツからクイズを生成するためのフォームを提供
  */
-export default function ContentUploader({ onQuizGenerated }: ContentUploaderProps) {
+export default function ContentUploader({ onQuizGenerated, onQuizSaved }: ContentUploaderProps) {
   // フォーム状態管理
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -122,6 +123,11 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
         const quiz = await response.json();
         onQuizGenerated(quiz);
         
+        // クイズリストの更新を通知
+        if (onQuizSaved) {
+          onQuizSaved();
+        }
+        
         // フォームをリセット
         setTitle('');
         setContent('');
@@ -147,6 +153,11 @@ export default function ContentUploader({ onQuizGenerated }: ContentUploaderProp
         
         const quiz = await response.json();
         onQuizGenerated(quiz);
+        
+        // クイズリストの更新を通知
+        if (onQuizSaved) {
+          onQuizSaved();
+        }
         
         // フォームをリセット
         setTitle('');

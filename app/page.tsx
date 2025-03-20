@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { QuizListHandle } from '@/components/QuizList';
 import ContentUploader from '@/components/ContentUploader';
 import QuizDisplay from '@/components/QuizDisplay';
 import QuizList from '@/components/QuizList';
@@ -10,6 +11,15 @@ import { Quiz } from '@/lib/types';
 export default function Home() {
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const quizDisplayRef = useRef<HTMLDivElement>(null);
+  const quizListRef = useRef<QuizListHandle>(null);
+  
+  // クイズリストを更新する関数
+  const refreshQuizList = () => {
+    // quizListRefがセットされていればfetchQuizzesを呼び出す
+    if (quizListRef.current) {
+      quizListRef.current.fetchQuizzes();
+    }
+  };
   
   // クイズ選択時に表示エリアにスクロールする関数
   const handleQuizSelect = (quiz: Quiz) => {
@@ -33,15 +43,24 @@ export default function Home() {
           <div className="lg:w-2/5 xl:w-1/3">
             <div className="card bg-panel border border-border/30 shadow-lg">
               <h2 className="text-xl md:text-2xl text-text-accent mb-4 font-bold">学習コンテンツからクイズを生成</h2>
-              <ContentUploader onQuizGenerated={handleQuizSelect} />
+              <ContentUploader 
+                onQuizGenerated={handleQuizSelect} 
+                onQuizSaved={refreshQuizList}
+              />
             </div>
           </div>
           <div className="lg:w-3/5 xl:w-2/3">
-            <QuizList onSelectQuiz={handleQuizSelect} />
+          <QuizList 
+              ref={quizListRef} 
+              onSelectQuiz={handleQuizSelect} 
+            />
             <div ref={quizDisplayRef} className="mt-6">
               {activeQuiz ? (
                 <div className="quiz-container p-1">
-                  <QuizDisplay quiz={activeQuiz} />
+                  <QuizDisplay 
+                    quiz={activeQuiz} 
+                    onQuizSaved={refreshQuizList} 
+                  />
                 </div>
               ) : (
                 <div className="placeholder">
