@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * 強化版 標準認証コールバックハンドラー
  * プライマリコールバックパス - 詳細診断と厳格エラー処理
+ * 構造的完全性向上による安定性確保
  */
 export async function GET(request: NextRequest) {
   try {
@@ -46,8 +47,11 @@ export async function GET(request: NextRequest) {
       );
     }
     
+    // 認証コードの取得または代替手段での抽出
+    let finalCode = code;
+    
     // 認証コード妥当性検証
-    if (!code) {
+    if (!finalCode) {
       console.error('認証コード不在 - リクエスト診断:', {
         headers: Object.fromEntries(Array.from(request.headers.entries())),
         cookies: request.cookies,
@@ -89,7 +93,7 @@ export async function GET(request: NextRequest) {
         tokenLength: extractedCode.length,
         tokenStart: extractedCode.substring(0, 5) + '...'
       });
-      code = extractedCode;
+      finalCode = extractedCode;
     } else {
       console.log('認証コード検出 - セッション交換シーケンス開始');
     }
@@ -101,13 +105,24 @@ export async function GET(request: NextRequest) {
       cookies: () => cookieStore,
     });
     
-    // セッション交換プロセスの多段階検証
-    const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+    // セッション交換プロセスの多段階検証 - 構造の平坦化
+    console.log('セッション交換プロセス開始 - コード長:', finalCode.length);
+    const sessionResult = await supabase.auth.exchangeCodeForSession(finalCode)
+      .catch(exchangeError => {
+        console.error('セッション交換プロセスの例外発生:', exchangeError);
+        const errorMessage = exchangeError instanceof Error 
+          ? exchangeError.message 
+          : 'セッション交換中の不明なエラー';
+          
+        throw new Error(`セッション交換失敗: ${errorMessage}`);
+      });
     
-    if (sessionError) {
+    // エラー処理の一元化
+    if (sessionResult.error) {
+      const sessionError = sessionResult.error;
       console.error('セッション交換障害詳細:', {
         error: sessionError,
-        code: code.substring(0, 10) + '...', // 安全なログ出力
+        code: finalCode.substring(0, 10) + '...', // 安全なログ出力
         timestamp: new Date().toISOString(),
       });
       return NextResponse.redirect(
@@ -116,9 +131,10 @@ export async function GET(request: NextRequest) {
     }
     
     // セッション確立成功メトリクス
+    const sessionData = sessionResult.data;
     console.log('認証サイクル完了 - セッション確立成功', {
-      userId: data?.session?.user?.id ? (data.session.user.id.substring(0, 8) + '...') : 'unknown',
-      expires: data?.session?.expires_at,
+      userId: sessionData?.session?.user?.id ? (sessionData.session.user.id.substring(0, 8) + '...') : 'unknown',
+      expires: sessionData?.session?.expires_at,
       timestamp: new Date().toISOString(),
     });
     

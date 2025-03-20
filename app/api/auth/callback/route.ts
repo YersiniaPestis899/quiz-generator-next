@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * 強化版 Supabase Auth OAuth コールバックハンドラー
  * 詳細診断ログと堅牢なエラー処理を実装
+ * 構造的完全性の向上による安定性確保
  */
 export async function GET(request: NextRequest) {
   try {
@@ -41,8 +42,11 @@ export async function GET(request: NextRequest) {
       );
     }
     
+    // 認証コードの取得または代替手段での抽出
+    let finalCode = code;
+    
     // 認証コード検証の強化
-    if (!code) {
+    if (!finalCode) {
       console.error('認証コード欠落 - リクエスト診断:', {
         headers: Object.fromEntries(Array.from(request.headers.entries())),
       });
@@ -81,7 +85,7 @@ export async function GET(request: NextRequest) {
         tokenLength: extractedCode.length,
         tokenStart: extractedCode.substring(0, 5) + '...'
       });
-      code = extractedCode;
+      finalCode = extractedCode;
     } else {
       console.log('認証コード検出 - セッション交換プロセス開始');
     }
@@ -93,61 +97,59 @@ export async function GET(request: NextRequest) {
       cookies: () => cookieStore,
     });
     
-    // セッション交換プロセスの堅牢化
-    try {
-      console.log('セッション交換プロセス開始 - コード長:', code.length);
-      const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
-      
-      if (sessionError) {
-        console.error('セッション交換障害診断:', {
-          error: sessionError,
-          message: sessionError.message,
-          code: code.substring(0, 10) + '...' // コードの一部を安全にログ
-        });
-        
-        // 拡張エラー診断情報
-        const diagnosticInfo = {
-          timestamp: new Date().toISOString(),
-          statusCode: sessionError.status || 'unknown',
-          errorCode: (sessionError as any).code || 'unknown',
-          authProvider: 'google',
-          requestPath: requestUrl.pathname,
-          hasRefreshToken: cookieStore.getAll().some(c => c.name.includes('refresh-token'))
-        };
-        console.error('認証障害詳細診断:', diagnosticInfo);
-        
-        return NextResponse.redirect(
-          new URL(`/auth?error=session_error&details=${encodeURIComponent(sessionError.message)}`, requestUrl.origin)
-        );
-      }
-      
-      // セッション確立成功指標
-      console.log('認証サイクル完了 - セッション確立成功', {
-        userId: data?.session?.user?.id ? (data.session.user.id.substring(0, 8) + '...') : 'unknown',
-        expires: data?.session?.expires_at,
-        expiresIn: data?.session?.expires_at ? Math.floor(data.session.expires_at * 1000 - Date.now()) / 1000 : 'unknown',
-        provider: data?.session?.user?.app_metadata?.provider || 'unknown'
+    // セッション交換プロセスの堅牢化 - 構造の平坦化
+    console.log('セッション交換プロセス開始 - コード長:', finalCode.length);
+    const sessionResult = await supabase.auth.exchangeCodeForSession(finalCode)
+      .catch(exchangeError => {
+        console.error('セッション交換プロセスの例外発生:', exchangeError);
+        const errorMessage = exchangeError instanceof Error 
+          ? exchangeError.message 
+          : 'セッション交換中の不明なエラー';
+          
+        throw new Error(`セッション交換失敗: ${errorMessage}`);
+      });
+    
+    // エラー処理の一元化
+    if (sessionResult.error) {
+      const sessionError = sessionResult.error;
+      console.error('セッション交換障害診断:', {
+        error: sessionError,
+        message: sessionError.message,
+        code: finalCode.substring(0, 10) + '...' // コードの一部を安全にログ
       });
       
-      // クッキー設定を確認
-      const allCookies = cookieStore.getAll();
-      console.log('認証後のクッキー状態:', {
-        count: allCookies.length,
-        hasSbAuthCookie: allCookies.some(c => c.name.includes('sb-auth')),
-        hasRefreshToken: allCookies.some(c => c.name.includes('refresh-token')),
-      });
-    } catch (exchangeError) {
-      console.error('セッション交換プロセスの例外発生:', exchangeError);
-      
-      // セッション交換中の例外に対する対応
-      const errorMessage = exchangeError instanceof Error 
-        ? exchangeError.message 
-        : 'セッション交換中の不明なエラー';
+      // 拡張エラー診断情報
+      const diagnosticInfo = {
+        timestamp: new Date().toISOString(),
+        statusCode: sessionError.status || 'unknown',
+        errorCode: (sessionError as any).code || 'unknown',
+        authProvider: 'google',
+        requestPath: requestUrl.pathname,
+        hasRefreshToken: cookieStore.getAll().some(c => c.name.includes('refresh-token'))
+      };
+      console.error('認証障害詳細診断:', diagnosticInfo);
       
       return NextResponse.redirect(
-        new URL(`/auth?error=exchange_error&details=${encodeURIComponent(errorMessage)}`, requestUrl.origin)
+        new URL(`/auth?error=session_error&details=${encodeURIComponent(sessionError.message)}`, requestUrl.origin)
       );
     }
+    
+    // セッション確立成功指標
+    const sessionData = sessionResult.data;
+    console.log('認証サイクル完了 - セッション確立成功', {
+      userId: sessionData?.session?.user?.id ? (sessionData.session.user.id.substring(0, 8) + '...') : 'unknown',
+      expires: sessionData?.session?.expires_at,
+      expiresIn: sessionData?.session?.expires_at ? Math.floor(sessionData.session.expires_at * 1000 - Date.now()) / 1000 : 'unknown',
+      provider: sessionData?.session?.user?.app_metadata?.provider || 'unknown'
+    });
+    
+    // クッキー設定を確認
+    const allCookies = cookieStore.getAll();
+    console.log('認証後のクッキー状態:', {
+      count: allCookies.length,
+      hasSbAuthCookie: allCookies.some(c => c.name.includes('sb-auth')),
+      hasRefreshToken: allCookies.some(c => c.name.includes('refresh-token')),
+    });
     
     // 認証フロー完了 - ホームページへリダイレクト
     return NextResponse.redirect(new URL('/', requestUrl.origin));
