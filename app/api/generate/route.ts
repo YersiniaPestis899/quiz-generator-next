@@ -17,7 +17,8 @@ export async function POST(request: NextRequest) {
     // リクエストボディからパラメータを取得
     console.log('API: Received quiz generation request');
     const body = await request.json();
-    const { title, content, numQuestions = 5, difficulty = 'medium', existingQuiz }: QuizGenerationInput & { existingQuiz?: Quiz} = body;
+    const { title, content, numQuestions = 5, difficulty = 'medium', existingQuiz, similarToQuiz }: 
+      QuizGenerationInput & { existingQuiz?: Quiz, similarToQuiz?: Quiz } = body;
     
     console.log(`API: Processing quiz request: "${title}" with ${numQuestions} questions at ${difficulty} difficulty`);
     
@@ -49,6 +50,44 @@ export async function POST(request: NextRequest) {
       accessKeyId: awsKey ? '設定あり' : '未設定',
       secretAccessKey: awsSecret ? '設定あり' : '未設定'
     });
+    
+    // 元クイズを参考にした「似たようなクイズ」作成モード
+    if (similarToQuiz) {
+      console.log('API: Creating similar quiz based on existing quiz');
+      // 元クイズの情報を使用して似たようなクイズを生成
+      const quizData = await generateQuizWithClaude({ 
+        title, 
+        content: `元のクイズ: ${similarToQuiz.title}
+
+テーマや難易度を似たような内容で、新たな問題${numQuestions}問を生成してください。元クイズとほぼ同じジャンルですが、全く同じ問題ではなく、バリエーションを加えてください。
+
+${content}`, 
+        numQuestions, 
+        difficulty 
+      });
+      
+      // クイズオブジェクト作成
+      const quizId = uuidv4();
+      const timestamp = new Date().toISOString();
+      
+      const quiz = {
+        id: quizId,
+        title,
+        difficulty,
+        questions: quizData.questions,
+        created_at: timestamp,
+        user_id: userId  // ユーザーIDを追加
+      };
+      
+      console.log(`API: Created similar quiz with ID ${quizId} and ${quiz.questions.length} questions`);
+      
+      // Supabaseに保存
+      await saveQuiz(quiz);
+      console.log('API: Similar quiz saved successfully!');
+      
+      // 成功レスポンスを返す
+      return NextResponse.json(quiz);
+    }
     
     // 既存のクイズが指定されている場合は、そのまま再保存する
     if (existingQuiz) {

@@ -20,6 +20,24 @@ export default function Home() {
     setRefreshTrigger(prev => prev + 1);
   }, []);
   
+  // 似たクイズ生成時のハンドラー - 生成された新しいクイズをアクティブに設定
+  const handleSimilarQuizGenerated = (newQuiz: Quiz) => {
+    // 新しいクイズをアクティブクイズとして設定
+    setActiveQuiz(newQuiz);
+    // 表示をリフレッシュ
+    refreshQuizList();
+    
+    // クイズ表示部分にスクロール
+    setTimeout(() => {
+      if (quizDisplayRef.current) {
+        quizDisplayRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }
+    }, 100);
+  };
+  
   // クイズ選択時に表示エリアにスクロールする関数
   const handleQuizSelect = (quiz: Quiz) => {
     setActiveQuiz(quiz);
@@ -58,7 +76,8 @@ export default function Home() {
                 <div className="quiz-container p-1">
                   <QuizDisplay 
                     quiz={activeQuiz} 
-                    onQuizSaved={refreshQuizList} 
+                    onQuizSaved={refreshQuizList}
+                    onGenerateSimilar={handleSimilarQuizGenerated}
                   />
                 </div>
               ) : (

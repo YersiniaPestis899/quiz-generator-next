@@ -9,13 +9,14 @@ import ExpandableAnswerExplanation from './ExpandableAnswerExplanation';
 interface QuizDisplayProps {
   quiz: Quiz;
   onQuizSaved?: () => void; // クイズ保存後に呼び出されるコールバック
+  onGenerateSimilar?: (quiz: Quiz) => void; // 似たようなクイズ生成時のコールバック
 }
 
 /**
  * クイズ表示コンポーネント
  * クイズの問題と回答オプションを表示し、ユーザーの回答を追跡
  */
-export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
+export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: QuizDisplayProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
@@ -35,18 +36,100 @@ export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
   const [playCountdownSound, setPlayCountdownSound] = useState(false);
   const [playButtonClickSound, setPlayButtonClickSound] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGeneratingSimilar, setIsGeneratingSimilar] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
   
   /**
-   * クイズを保存するハンドラー
+   * 似たようなクイズを生成するハンドラー
    */
-  const handleSaveQuiz = async () => {
+  const handleGenerateSimilarQuiz = async () => {
+    // ボタンクリック音
+    setPlayButtonClickSound(true);
+    setTimeout(() => setPlayButtonClickSound(false), 300);
+    
+    // 似たような問題生成中に設定
+    setIsGeneratingSimilar(true);
+    setSaveMessage(null);
+    
+    try {
+      // まず現在のクイズを保存する
+      await handleSaveQuiz(false); // メッセージを表示しないモードで保存
+      
+      // 次に新しいタイトルを生成
+      // タイトルから数字を取り出す
+      const baseTitle = quiz.title.replace(/\s*\d+$/, '');
+      const match = quiz.title.match(/(\d+)$/);
+      let nextNumber = 2; // デフォルトは2番から開始
+      
+      if (match) {
+        // 数字が見つかった場合はその次の数字を使用
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+      
+      const newTitle = `${baseTitle} ${nextNumber}`;
+      
+      // APIを通じて似た問題を生成
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: newTitle,
+          content: `元クイズ: ${quiz.title}\nこのクイズと同様の教育内容で始めから生成してください。`,
+          numQuestions: quiz.questions.length,
+          difficulty: quiz.difficulty,
+          similarToQuiz: quiz // 元クイズをパラメータとして渡す
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || '似たようなクイズの生成に失敗しました');
+      }
+      
+      // 生成された新しいクイズを取得
+      const newQuiz = await response.json();
+      
+      // 成功メッセージを表示
+      setSaveMessage({
+        text: `似たようなクイズ「${newTitle}」を生成しました`,
+        type: 'success'
+      });
+      
+      // 親コンポーネントに新しいクイズを渡す
+      if (onGenerateSimilar) {
+        console.log('新しいクイズを親コンポーネントに通知');
+        onGenerateSimilar(newQuiz);
+      }
+      
+      // メッセージを数秒後に消す
+      setTimeout(() => {
+        setSaveMessage(null);
+      }, 3000);
+      
+    } catch (err: any) {
+      console.error('似たようなクイズ生成エラー:', err);
+      setSaveMessage({
+        text: '似たようなクイズの生成に失敗しました: ' + err.message,
+        type: 'error'
+      });
+    } finally {
+      setIsGeneratingSimilar(false);
+    }
+  };
+  
+  /**
+   * クイズを保存するハンドラー
+   * @param {boolean} showMessage - 保存後にメッセージを表示するかどうか
+   */
+  const handleSaveQuiz = async (showMessage = true) => {
     // ボタンクリック音
     setPlayButtonClickSound(true);
     setTimeout(() => setPlayButtonClickSound(false), 300);
     
     setIsSaving(true);
-    setSaveMessage(null);
+    if (showMessage) setSaveMessage(null);
     
     try {
       // /api/generateエンドポイントを再利用してクイズを保存
@@ -70,10 +153,17 @@ export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
       }
       
       // 成功メッセージを表示
-      setSaveMessage({
-        text: 'クイズを保存しました',
-        type: 'success'
-      });
+      if (showMessage) {
+        setSaveMessage({
+          text: 'クイズを保存しました',
+          type: 'success'
+        });
+        
+        // 3秒後にメッセージを消す
+        setTimeout(() => {
+          setSaveMessage(null);
+        }, 3000);
+      }
       
       // クイズリストを更新するため、保存完了を通知
       if (onQuizSaved) {
@@ -81,17 +171,14 @@ export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
         onQuizSaved();
       }
       
-      // 3秒後にメッセージを消す
-      setTimeout(() => {
-        setSaveMessage(null);
-      }, 3000);
-      
     } catch (err: any) {
       console.error('クイズ保存エラー:', err);
-      setSaveMessage({
-        text: '保存に失敗しました: ' + err.message,
-        type: 'error'
-      });
+      if (showMessage) {
+        setSaveMessage({
+          text: '保存に失敗しました: ' + err.message,
+          type: 'error'
+        });
+      }
     } finally {
       setIsSaving(false);
     }
@@ -517,10 +604,20 @@ export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
             
             <button 
               className="btn-accent flex-1"
-              onClick={handleSaveQuiz}
+              onClick={() => handleSaveQuiz(true)}
               disabled={isSaving}
             >
               {isSaving ? '保存中...' : 'クイズを保存'}
+            </button>
+          </div>
+          
+          <div className="flex mt-4">
+            <button 
+              className="btn-secondary w-full"
+              onClick={handleGenerateSimilarQuiz}
+              disabled={isGeneratingSimilar}
+            >
+              {isGeneratingSimilar ? '生成中...' : '似たような問題を作る'}
             </button>
           </div>
           
@@ -617,7 +714,7 @@ export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
         <div className="mt-4 flex justify-center">
           <button 
             className="btn-accent"
-            onClick={handleSaveQuiz}
+            onClick={() => handleSaveQuiz(true)}
             disabled={isSaving}
           >
             {isSaving ? '保存中...' : 'クイズを保存'}
