@@ -8,7 +8,9 @@ import { getUserIdOrAnonymousId } from '@/lib/auth';
 
 // Edge Runtimeを有効化し、長時間実行を可能にする
 export const runtime = 'edge';
-// 最大実行時間を明示的に設定
+
+// Next.js App Routerの新しい構文で最大実行時間を設定
+// 注: これはEdge Functionsにも適用されます
 export const maxDuration = 60;
 
 // これは実際の実装です - AWS Bedrock Claude 3.5 Sonnetを使用
@@ -63,10 +65,22 @@ export async function POST(request: NextRequest) {
         // Edge RuntimeとmaxDurationで最大実行時間が拡張されたことをログに記録
         console.log('API: Starting similar quiz generation with extended execution time (Edge Runtime + maxDuration: 60s)');
         
+        // クイズ生成のプロンプトを最適化（処理回路激化のための必要情報のみに制限）
+        const optimizedContent = `前回のクイズと似た関連テーマで新しいクイズを作成してください。
+元クイズタイトル: ${similarToQuiz.title}
+問題数: ${numQuestions}
+難易度: ${difficulty}
+
+元の問題からテーマと種類を維持しつつ、新しい問題を生成してください。
+回答選択肢は単純かつ簡潔にしてください。
+結果をJSON形式で返してください。`;
+        
+        console.log(`プロンプト最適化: 必要最小限の指示に絶ったプロンプトサイズ ${optimizedContent.length} バイト`);
+        
         // 元クイズの情報を使用して似たようなクイズを生成
         const quizData = await generateQuizWithClaude({ 
           title, 
-          content: `元のクイズ: ${similarToQuiz.title}\n\nテーマや難易度を似たような内容で、新たな問題${numQuestions}問を生成してください。元クイズとほぼ同じジャンルですが、全く同じ問題ではなく、バリエーションを加えてください。\n\n${content}`, 
+          content: optimizedContent,
           numQuestions, 
           difficulty 
         });

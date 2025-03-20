@@ -19,12 +19,22 @@ async function getBedrockClient() {
     try {
       // NodeHttpHandlerをNode.js環境でのみ動的にインポート
       if (typeof window === 'undefined') { // ブラウザではなくNode.js環境
-        const { NodeHttpHandler } = await import('@smithy/node-http-handler');
-        clientConfig.requestHandler = new NodeHttpHandler({
-          connectionTimeout: 39000, // 接続確立のタイムアウト: 39秒
-          socketTimeout: 39000,     // データ送受信のタイムアウト: 39秒
-        });
-        console.log('カスタムタイムアウト設定が適用されました: 39秒');
+        // Edge Runtime環境ではFetchHttpHandlerが適切
+        if (process.env.NEXT_RUNTIME === 'edge') {
+          console.log('Edge Runtime環境を検出しました。適切なタイムアウト設定を適用します');
+          const { FetchHttpHandler } = await import('@smithy/fetch-http-handler');
+          clientConfig.requestHandler = new FetchHttpHandler({
+            requestTimeout: 59000, // Edge Runtimeのタイムアウト設定: 59秒
+          });
+        } else {
+          // 通常のNode.js環境
+          const { NodeHttpHandler } = await import('@smithy/node-http-handler');
+          clientConfig.requestHandler = new NodeHttpHandler({
+            connectionTimeout: 59000, // 接続確立のタイムアウト: 59秒
+            socketTimeout: 59000,     // データ送受信のタイムアウト: 59秒
+          });
+        }
+        console.log('カスタムタイムアウト設定が適用されました: 59秒');
       }
     } catch (error) {
       console.warn('NodeHttpHandlerのインポートに失敗しました。デフォルトのタイムアウト設定を使用します:', error);

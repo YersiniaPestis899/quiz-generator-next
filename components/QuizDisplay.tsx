@@ -55,9 +55,9 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
     // サーバー側でEdge RuntimeとmaxDurationが適切に設定されているため
     
     try {
-      // 生成中メッセージを表示
+      // 生成中メッセージを表示 - ユーザーに時間がかかることを明確に伝える
       setSaveMessage({
-        text: `似たようなクイズを生成中です。しばらくお待ちください...`,
+        text: `似たようなクイズを生成中です。最大でも約60秒かかりますが、お待ちください...`,
         type: 'success'
       });
       
