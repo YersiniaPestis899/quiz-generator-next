@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { generateQuizWithClaude } from '@/lib/claude';
 import { saveQuiz } from '@/lib/supabase';
-import { QuizGenerationInput } from '@/lib/types';
+import { QuizGenerationInput, Quiz } from '@/lib/types';
 import { getUserIdOrAnonymousId } from '@/lib/auth';
 
 // これは実際の実装です - AWS Bedrock Claude 3.5 Sonnetを使用
