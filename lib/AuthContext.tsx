@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { Session, User } from '@supabase/supabase-js';
 import { clearAnonymousId } from './auth';
+import { getEnvVar } from './envUtils';
 
 type AuthContextType = {
   session: Session | null;
@@ -66,25 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('認証フロー診断モード開始: Google OAuth');
       
-      // 環境変数アクセスの堅牢化
-      const getEnvVar = (key: string, fallback: string = '') => {
-        // 1. クライアントサイド環境変数オブジェクト
-        if (typeof window !== 'undefined' && window.ENV_VARS && window.ENV_VARS[key]) {
-          return window.ENV_VARS[key];
-        }
-        // 2. Next.js 環境変数
-        const envKey = `NEXT_PUBLIC_${key}`;
-        if (typeof process !== 'undefined' && process.env && process.env[envKey]) {
-          return process.env[envKey];
-        }
-        // 3. 現在のオリジン
-        if (typeof window !== 'undefined' && key === 'SITE_URL') {
-          return window.location.origin;
-        }
-        return fallback;
-      };
-      
-      // サイトURLを複数のソースから冗長的に取得
+      // サイトURLを型安全なユーティリティで取得
       const siteUrl = getEnvVar('SITE_URL', typeof window !== 'undefined' ? window.location.origin : '');
       
       console.log('認証サイト基盤URL:', siteUrl);
