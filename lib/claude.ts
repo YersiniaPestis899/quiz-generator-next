@@ -5,17 +5,33 @@ import { detectSpecialCategory, SPECIAL_CATEGORIES } from './specialCategories';
 // BedrockクライアントをシングルトンパターンでNode.js環境で初期化
 let bedrockClient: BedrockRuntimeClient | null = null;
 
-function getBedrockClient() {
+async function getBedrockClient() {
   if (!bedrockClient && typeof process !== 'undefined') {
-    bedrockClient = new BedrockRuntimeClient({ 
+    // 基本設定オブジェクト
+    const clientConfig: any = { 
       region: process.env.AWS_REGION || 'us-west-2',
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-      },
-      // タイムアウト設定を増加（ミリ秒単位）
-      requestTimeout: 39000 // 39秒に設定（40秒未満に設定）
-    });
+      }
+    };
+    
+    try {
+      // NodeHttpHandlerをNode.js環境でのみ動的にインポート
+      if (typeof window === 'undefined') { // ブラウザではなくNode.js環境
+        const { NodeHttpHandler } = await import('@smithy/node-http-handler');
+        clientConfig.requestHandler = new NodeHttpHandler({
+          connectionTimeout: 39000, // 接続確立のタイムアウト: 39秒
+          socketTimeout: 39000,     // データ送受信のタイムアウト: 39秒
+        });
+        console.log('カスタムタイムアウト設定が適用されました: 39秒');
+      }
+    } catch (error) {
+      console.warn('NodeHttpHandlerのインポートに失敗しました。デフォルトのタイムアウト設定を使用します:', error);
+    }
+    
+    // クライアント初期化
+    bedrockClient = new BedrockRuntimeClient(clientConfig);
   }
   return bedrockClient;
 }
@@ -27,7 +43,7 @@ function getBedrockClient() {
  */
 export async function generateQuizWithClaude(input: QuizGenerationInput) {
   const { content, numQuestions, difficulty } = input;
-  const bedrockRuntime = getBedrockClient();
+  const bedrockRuntime = await getBedrockClient();
   
   if (!bedrockRuntime) {
     throw new Error('Bedrock clientが初期化されていません');
