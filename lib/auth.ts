@@ -130,6 +130,15 @@ async function isAuthenticated() {
 }
 
 /**
+ * 廃止予定: 化名ユーザーIDをクリアする関数
+ * 後方互換性のために維持
+ * clearAuthStateと同じ機能を提供
+ */
+function clearAnonymousId() {
+  return clearAuthState();
+}
+
+/**
  * 認証関連の状態をクリア
  * ログアウト時に呼び出す
  */
@@ -155,7 +164,8 @@ const auth = {
   getUserId,
   getUserIdOrAnonymousId,
   isAuthenticated,
-  clearAuthState
+  clearAuthState,
+  clearAnonymousId
 };
 
 // Only export once via named exports
@@ -164,7 +174,8 @@ export {
   getUserId,
   getUserIdOrAnonymousId,
   isAuthenticated,
-  clearAuthState 
+  clearAuthState,
+  clearAnonymousId
 };
 
 // Also provide a default export for flexibility
