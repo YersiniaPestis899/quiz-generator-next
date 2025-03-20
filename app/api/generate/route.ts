@@ -70,7 +70,14 @@ export async function POST(request: NextRequest) {
     console.log(`API: Created quiz with ID ${quizId} and ${quiz.questions.length} questions`);
     
     // Supabaseに保存
-    console.log('API: Saving quiz to Supabase...');
+    console.log('API: Saving quiz to Supabase with data:', {
+      id: quizId,
+      title,
+      difficulty,
+      questionsCount: quiz.questions.length,
+      sampleQuestion: quiz.questions[0]?.text.substring(0, 50) + '...',
+      userId
+    });
     await saveQuiz(quiz);
     console.log('API: Quiz saved successfully!');
     

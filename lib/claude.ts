@@ -119,9 +119,17 @@ function buildQuizPrompt(content: string, numQuestions: number, difficulty: stri
     promptTemplate = promptTemplate
       .replace('{numQuestions}', numQuestions.toString())
       .replace('{difficulty}', difficulty);
+      
+    // 変換コンテンツが存在する場合は、プロンプトに追加
+    const contentSection = transformedContent ? `
+
+ユーザーが提供したコンテンツ:
+${transformedContent}
+
+上記のコンテンツに基づいてクイズを生成してください。コンテンツの内容を尊重し、そこから直接問題と回答を作成してください。` : '';
     
     // 共通JSON構造部分を付加
-    return `${promptTemplate}
+    return `${promptTemplate}${contentSection}
 
 ${getCommonJsonInstructions(numQuestions, difficulty)}`;
   }
