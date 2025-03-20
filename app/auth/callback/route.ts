@@ -17,9 +17,22 @@ export async function GET(request: NextRequest) {
     });
     
     // クエリパラメータ包括分析
-    const code = requestUrl.searchParams.get('code');
-    const error = requestUrl.searchParams.get('error');
-    const errorDescription = requestUrl.searchParams.get('error_description');
+    const searchParams = requestUrl.searchParams;
+    const code = searchParams.get('code');
+    const error = searchParams.get('error');
+    const errorDescription = searchParams.get('error_description');
+    const state = searchParams.get('state'); // OAuth状態トークン
+    
+    // 完全なURLデバッグ情報
+    console.log('受信コールバックURL詳細:', {
+      fullUrl: requestUrl.toString(),
+      path: requestUrl.pathname,
+      queryString: requestUrl.search,
+      allParams: Object.fromEntries(searchParams.entries()),
+      hasCode: !!code,
+      hasError: !!error,
+      hasState: !!state
+    });
     
     // エラー状態の前方検出と処理
     if (error) {
@@ -40,10 +53,46 @@ export async function GET(request: NextRequest) {
         cookies: request.cookies,
         url: requestUrl.toString(),
       });
-      return NextResponse.redirect(new URL('/auth?error=missing_code', requestUrl.origin));
+      
+      // 代替認証メカニズムの試行
+      let extractedCode = null;
+      
+      // ヘッダーからのIDトークン抽出試行
+      const authHeader = request.headers.get('authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        extractedCode = authHeader.substring(7); // 'Bearer ' の後のトークン部分
+        console.log('認証ヘッダーからトークンを抽出しました');
+      }
+      
+      // URLパスからのトークン抽出試行
+      if (!extractedCode && requestUrl.pathname.includes('/')) {
+        const pathSegments = requestUrl.pathname.split('/');
+        if (pathSegments.length > 0) {
+          const lastSegment = pathSegments[pathSegments.length - 1];
+          // トークンらしきセグメントを探す
+          if (lastSegment && lastSegment.length > 20) {
+            extractedCode = lastSegment;
+            console.log('URLパスから認証トークン候補を抽出しました');
+          }
+        }
+      }
+      
+      // 対策的な代替手段がない場合
+      if (!extractedCode) {
+        // API転送が必要かもしれない
+        console.log('代替認証メカニズムへの転送試行');
+        return NextResponse.redirect(new URL('/api/auth/callback' + requestUrl.search, requestUrl.origin));
+      }
+      
+      // 抽出したトークンを使用して続行
+      console.log('代替認証メカニズムを使用します:', {
+        tokenLength: extractedCode.length,
+        tokenStart: extractedCode.substring(0, 5) + '...'
+      });
+      code = extractedCode;
+    } else {
+      console.log('認証コード検出 - セッション交換シーケンス開始');
     }
-    
-    console.log('認証コード検出 - セッション交換シーケンス開始');
     
     // クッキーコンテキスト強化
     const cookieStore = cookies();
