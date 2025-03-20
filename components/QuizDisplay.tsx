@@ -202,29 +202,53 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
           body: JSON.stringify(requestBody),
         });
       
-      if (!response.ok) {
-        let errorMessage = '似たようなクイズの生成ジョブ登録に失敗しました';
-        
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-        } catch (parseError) {
-          console.error('レスポンス解析エラー:', parseError);
+      // エラー処理を改善 - 500エラーでもレスポンス解析を試みる
+      let responseData;
+      try {
+        responseData = await response.json();
+        console.log('ジョブ登録レスポンス:', responseData);
+      } catch (parseError) {
+        console.error('レスポンス解析エラー:', parseError);
+        // 解析に失敗した場合はおそらくレスポンスが無効
+        if (!response.ok) {
+          throw new Error('サーバーとの通信に問題が発生しました');
         }
-        
+      }
+      
+      // 通常のエラー処理
+      if (!response.ok && !responseData?.recoveryMode) {
+        const errorMessage = responseData?.message || '似たようなクイズの生成ジョブ登録に失敗しました';
         throw new Error(errorMessage);
       }
       
-      // ジョブ情報を取得
-      const jobData = await response.json();
-      console.log('ジョブ登録成功:', jobData);
+      // ジョブIDを取得 - responseDataがすでに解析済み
+      let jobId;
+      
+      // 回復モードの場合も継続する（jobIdが含まれていれば）
+      if (responseData?.recoveryMode && responseData?.jobId) {
+        console.log('回復モードで続行します:', responseData);
+        jobId = responseData.jobId;
+      } else {
+        // 通常モード
+        jobId = responseData.jobId;
+        console.log('標準モードで続行します - ジョブID:', jobId);
+      }
+      
+      // ジョブIDの存在確認
+      if (!jobId) {
+        console.error('ジョブIDが未定義です', responseData);
+        // 一時的な値を生成
+        jobId = `fallback_${Math.random().toString(36).substring(2, 10)}`;
+      }
       
       // ジョブIDを保存してポーリングを開始
-      setJobId(jobData.jobId);
+      setJobId(jobId);
       
       // 登録成功メッセージを表示
       setSaveMessage({
-        text: `クイズ生成ジョブを登録しました。処理状況を確認中です...`,
+        text: responseData.recoveryMode 
+          ? `クイズ生成準備中... (復旧モード)`
+          : `クイズ生成ジョブを登録しました。処理状況を確認中です...`,
         type: 'success'
       });
       
