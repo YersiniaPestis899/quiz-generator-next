@@ -9,14 +9,14 @@ import ExpandableAnswerExplanation from './ExpandableAnswerExplanation';
 interface QuizDisplayProps {
   quiz: Quiz;
   onQuizSaved?: () => void; // クイズ保存後に呼び出されるコールバック
-  onGenerateSimilar?: (quiz: Quiz) => void; // 似たようなクイズ生成時のコールバック
+  // onGenerateSimilar機能を削除
 }
 
 /**
  * クイズ表示コンポーネント
  * クイズの問題と回答オプションを表示し、ユーザーの回答を追跡
  */
-export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: QuizDisplayProps) {
+export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
@@ -36,235 +36,12 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
   const [playCountdownSound, setPlayCountdownSound] = useState(false);
   const [playButtonClickSound, setPlayButtonClickSound] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isGeneratingSimilar, setIsGeneratingSimilar] = useState(false);
+  // 似たような問題生成関連の状態変数を削除
   const [saveMessage, setSaveMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
   
-  // ポーリング関連の状態
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
-  const [pollingRetries, setPollingRetries] = useState(0); // 再試行カウンタ
-  const [pollingBackoff, setPollingBackoff] = useState(3000); // バックオフ間隔(ミリ秒)
+  // 似たような問題生成関連のポーリング処理を削除
   
-  /**
-   * ジョブの状態を定期的に確認するポーリング処理
-   */
-  useEffect(() => {
-    // ジョブIDがない場合はポーリングしない
-    if (!jobId) return;
-    
-    // すでにポーリングが開始されている場合はそのまま
-    if (pollingInterval) return;
-    
-    console.log(`ジョブID ${jobId} のポーリングを開始します`);
-    
-    // 3秒ごとにジョブの状態を確認
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`/api/quiz-jobs/${jobId}`);
-        
-        if (!response.ok) {
-          throw new Error('ジョブ状態の取得に失敗しました');
-        }
-        
-        const jobStatus = await response.json();
-        console.log('ジョブ状態:', jobStatus);
-        
-        // ジョブの状態に応じた処理
-        if (jobStatus.status === 'completed' && jobStatus.result) {
-          // ポーリングを停止
-          clearInterval(interval);
-          setPollingInterval(null);
-          setJobId(null);
-          
-          // 結果のクイズを表示
-          if (onGenerateSimilar) {
-            console.log('生成完了したクイズを親コンポーネントに通知');
-            onGenerateSimilar(jobStatus.result);
-          }
-          
-          // 生成完了メッセージを表示
-          setSaveMessage({
-            text: `似たようなクイズ「${jobStatus.result.title}」を生成しました`,
-            type: 'success'
-          });
-          
-          // 生成中フラグをリセット
-          setIsGeneratingSimilar(false);
-          
-        } else if (jobStatus.status === 'failed') {
-          // ポーリングを停止
-          clearInterval(interval);
-          setPollingInterval(null);
-          setJobId(null);
-          
-          // エラーメッセージを表示
-          setSaveMessage({
-            text: `クイズ生成に失敗しました: ${jobStatus.error || '不明なエラー'}`,
-            type: 'error'
-          });
-          
-          // 生成中フラグをリセット
-          setIsGeneratingSimilar(false);
-          
-        } else if (jobStatus.status === 'pending' || jobStatus.status === 'processing') {
-          // 進行中の場合は状態メッセージを更新
-          if (jobStatus.progress) {
-            setSaveMessage({
-              text: `クイズ生成中... (${jobStatus.progress.elapsedSeconds}秒経過、残り約${jobStatus.progress.estimatedRemainingSeconds}秒)`,
-              type: 'success'
-            });
-          }
-        }
-        
-      } catch (error) {
-        console.error('ジョブ状態の確認に失敗:', error);
-        
-        // エラーが続く場合はポーリングを停止
-        clearInterval(interval);
-        setPollingInterval(null);
-        setJobId(null);
-        
-        setSaveMessage({
-          text: '処理状態の確認に失敗しました。もう一度お試しください。',
-          type: 'error'
-        });
-        
-        setIsGeneratingSimilar(false);
-      }
-    }, 3000);
-    
-    // インターバルを保存
-    setPollingInterval(interval);
-    
-    // クリーンアップ関数
-    return () => {
-      clearInterval(interval);
-      setPollingInterval(null);
-    };
-  }, [jobId, onGenerateSimilar]);
-  
-  /**
-   * 似たようなクイズを非同期ジョブで生成するハンドラー
-   */
-  const handleGenerateSimilarQuiz = async () => {
-    // ボタンクリック音
-    setPlayButtonClickSound(true);
-    setTimeout(() => setPlayButtonClickSound(false), 300);
-    
-    // 似たような問題生成中に設定
-    setIsGeneratingSimilar(true);
-    setSaveMessage(null);
-    
-    try {
-    // 非同期ジョブとしてクイズ生成をリクエスト
-    // ジョブは即度作成され、バックグラウンドで処理されます
-    setSaveMessage({
-    text: `似たようなクイズ生成ジョブを登録中...`,
-    type: 'success'
-    });
-    
-    // まず現在のクイズを保存する
-    await handleSaveQuiz(false); // メッセージを表示しないモードで保存
-    
-    // 次に新しいタイトルを生成
-    // タイトルから数字を取り出す
-    const baseTitle = quiz.title.replace(/\s*\d+$/, '');
-    const match = quiz.title.match(/(\d+)$/);
-    let nextNumber = 2; // デフォルトは2番から開始
-    
-    if (match) {
-    // 数字が見つかった場合はその次の数字を使用
-    nextNumber = parseInt(match[1], 10) + 1;
-    }
-    
-    const newTitle = `${baseTitle} ${nextNumber}`;
-    
-    // リクエストボディの作成
-    const requestBody = {
-    title: newTitle,
-    numQuestions: quiz.questions.length,
-    difficulty: quiz.difficulty || 'medium', // デフォルト値を追加
-    originalQuiz: {
-      id: quiz.id,
-    title: quiz.title,
-    // 他の必要なフィールドを含むように細心の注意を払う
-    difficulty: quiz.difficulty || 'medium',
-    questions: quiz.questions.slice(0, 3) // リクエストサイズを削減するために最初の3問のみを送信
-    }
-    };
-        
-        console.log('ジョブ登録リクエスト:', requestBody);
-        
-        // 非同期ジョブAPIを呼び出し
-        const response = await fetch('/api/quiz-jobs', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-      
-      // エラー処理を改善 - 500エラーでもレスポンス解析を試みる
-      let responseData;
-      try {
-        responseData = await response.json();
-        console.log('ジョブ登録レスポンス:', responseData);
-      } catch (parseError) {
-        console.error('レスポンス解析エラー:', parseError);
-        // 解析に失敗した場合はおそらくレスポンスが無効
-        if (!response.ok) {
-          throw new Error('サーバーとの通信に問題が発生しました');
-        }
-      }
-      
-      // 通常のエラー処理
-      if (!response.ok && !responseData?.recoveryMode) {
-        const errorMessage = responseData?.message || '似たようなクイズの生成ジョブ登録に失敗しました';
-        throw new Error(errorMessage);
-      }
-      
-      // ジョブIDを取得 - responseDataがすでに解析済み
-      let jobId;
-      
-      // 回復モードの場合も継続する（jobIdが含まれていれば）
-      if (responseData?.recoveryMode && responseData?.jobId) {
-        console.log('回復モードで続行します:', responseData);
-        jobId = responseData.jobId;
-      } else {
-        // 通常モード
-        jobId = responseData.jobId;
-        console.log('標準モードで続行します - ジョブID:', jobId);
-      }
-      
-      // ジョブIDの存在確認
-      if (!jobId) {
-        console.error('ジョブIDが未定義です', responseData);
-        // 一時的な値を生成
-        jobId = `fallback_${Math.random().toString(36).substring(2, 10)}`;
-      }
-      
-      // ジョブIDを保存してポーリングを開始
-      setJobId(jobId);
-      
-      // 登録成功メッセージを表示
-      setSaveMessage({
-        text: responseData.recoveryMode 
-          ? `クイズ生成準備中... (復旧モード)`
-          : `クイズ生成ジョブを登録しました。処理状況を確認中です...`,
-        type: 'success'
-      });
-      
-    } catch (err: any) {
-      console.error('似たようなクイズ生成ジョブ登録エラー:', err);
-      
-      setSaveMessage({
-        text: err.message || '似たようなクイズの生成ジョブ登録に失敗しました',
-        type: 'error'
-      });
-      
-      setIsGeneratingSimilar(false);
-    }
-  };
+  // 似たようなクイズ生成関連のハンドラーを削除
   
   /**
    * クイズを保存するハンドラー
@@ -755,16 +532,6 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
               disabled={isSaving}
             >
               {isSaving ? '保存中...' : 'クイズを保存'}
-            </button>
-          </div>
-          
-          <div className="flex mt-4">
-            <button 
-              className="btn-secondary w-full"
-              onClick={handleGenerateSimilarQuiz}
-              disabled={isGeneratingSimilar}
-            >
-              {isGeneratingSimilar ? '生成中...' : '似たような問題を作る'}
             </button>
           </div>
           
