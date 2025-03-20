@@ -3,10 +3,8 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   // APIルート処理の最大サイズを増やす（Claudeレスポンス用）
-  api: {
-    bodyParser: {
-      sizeLimit: '4mb',
-    },
+  experimental: {
+    serverComponentsExternalPackages: ['@aws-sdk/client-bedrock-runtime'],
   },
 };
 
