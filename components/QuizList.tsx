@@ -69,7 +69,7 @@ export default function QuizList({ onSelectQuiz }: QuizListProps) {
       }
       
       const data = await response.json();
-      setQuizzes(data);
+      setPersonalQuizzes(data);
     } catch (err: any) {
       console.error('クイズ取得エラー:', err);
       setError('クイズの読み込みに失敗しました: ' + err.message);
