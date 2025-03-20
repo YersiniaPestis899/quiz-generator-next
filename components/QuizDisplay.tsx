@@ -9,14 +9,14 @@ import ExpandableAnswerExplanation from './ExpandableAnswerExplanation';
 interface QuizDisplayProps {
   quiz: Quiz;
   onQuizSaved?: () => void; // クイズ保存後に呼び出されるコールバック
-  // onGenerateSimilar機能を削除
+  onGenerateSimilar?: (newQuiz: Quiz) => void; // 似たようなクイズ生成後のコールバック（オプション）
 }
 
 /**
  * クイズ表示コンポーネント
  * クイズの問題と回答オプションを表示し、ユーザーの回答を追跡
  */
-export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
+export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: QuizDisplayProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
   const [showResults, setShowResults] = useState(false);
