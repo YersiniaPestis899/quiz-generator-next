@@ -178,5 +178,4 @@ export default function QuizList({ onSelectQuiz, onRefreshRequest }: QuizListPro
       )}
     </div>
   );
-);
 }
