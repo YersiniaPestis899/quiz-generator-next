@@ -1,19 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import AuthButton from '@/components/AuthButton';
 
-export default function AuthPage() {
-  const { user, isLoading } = useAuth();
-  const router = useRouter();
-  const searchParams = useSearchParams();
+// クライアントサイドのみで実行されるエラーハンドリングコンポーネント
+function ErrorParamHandler() {
   const [error, setError] = useState<string | null>(null);
   
-  // エラーパラメータの処理
+  // クライアントサイドでのみwindow.locationを使用
   useEffect(() => {
-    const errorParam = searchParams.get('error');
+    // URLからエラーパラメータを直接取得
+    const urlParams = new URLSearchParams(window.location.search);
+    const errorParam = urlParams.get('error');
+    
     if (errorParam) {
       switch (errorParam) {
         case 'missing_code':
@@ -29,7 +30,20 @@ export default function AuthPage() {
           setError('認証中にエラーが発生しました。もう一度お試しください。');
       }
     }
-  }, [searchParams]);
+  }, []);
+  
+  if (!error) return null;
+  
+  return (
+    <div className="mb-4 p-3 bg-red-900/30 text-red-300 border border-red-500/30 rounded-lg text-center">
+      <p className="text-sm">{error}</p>
+    </div>
+  );
+}
+
+export default function AuthPage() {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
   
   // ログイン済みの場合はホームにリダイレクト
   useEffect(() => {
@@ -49,11 +63,10 @@ export default function AuthPage() {
           Googleアカウントでログインすると、クイズの履歴が永続的に保存され、異なるデバイスでも学習の進捗を確認できます。
         </p>
         
-        {error && (
-          <div className="mb-4 p-3 bg-red-900/30 text-red-300 border border-red-500/30 rounded-lg text-center">
-            <p className="text-sm">{error}</p>
-          </div>
-        )}
+        {/* エラーハンドリングをSuspense境界内に配置 */}
+        <Suspense fallback={null}>
+          <ErrorParamHandler />
+        </Suspense>
         
         <div className="flex flex-col items-center space-y-8">
           <div className="bg-background/50 p-5 rounded-xl w-full">
