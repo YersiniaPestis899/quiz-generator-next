@@ -57,10 +57,10 @@ export async function GET(request: NextRequest) {
         details: cookieList.map(c => ({
           name: c.name,
           value: c.name.includes('auth') ? '[masked]' : '[masked]',
-          secure: c.secure,
-          httpOnly: c.httpOnly,
-          maxAge: c.maxAge,
-          sameSite: c.sameSite,
+          secure: c.name.includes('sb-auth') ? true : false, // PropertyがないためnamingからSecureかどうかを推定
+          httpOnly: c.name.includes('sb-auth') ? true : false, // PropertyがないためnamingからhttpOnlyかどうかを推定
+          maxAge: null, // Propertyがないため無視
+          sameSite: 'lax', // Propertyがないためデフォルト値を指定
         })),
       },
       request: {
