@@ -3,7 +3,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateQuizWithClaude } from '@/lib/claude';
 import { saveQuiz } from '@/lib/supabase';
 import { QuizGenerationInput, Quiz } from '@/lib/types';
-import { getUserIdOrAnonymousId } from '@/lib/auth';
+// Using the default import and then destructuring to avoid import issues
+import auth from '@/lib/auth';
+const { getUserIdOrAnonymousId } = auth;
 
 // これは実際の実装です - AWS Bedrock Claude 3.5 Sonnetを使用
 
