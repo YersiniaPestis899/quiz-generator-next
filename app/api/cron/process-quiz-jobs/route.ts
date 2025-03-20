@@ -4,9 +4,12 @@ import { generateQuizWithClaude } from '@/lib/claude';
 import { saveQuiz } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 
-// サーバーレス関数としての長時間実行を可能にする
-// 注意: これはEdge RuntimeではなくNode.js環境で実行されるため、タイムアウト制限が異なります
-export const maxDuration = 300; // 5分の処理時間を許可
+// サーバーレス関数としての実行時間を設定
+// Vercelのhobbyプランでは最大60秒まで
+export const maxDuration = 60; // 60秒の処理時間を許可
+
+// 動的ルートハンドラとして明示的に定義
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/cron/process-quiz-jobs
@@ -26,8 +29,8 @@ export async function GET(request: NextRequest) {
   }
   
   try {
-    // 保留中のジョブを取得 (最大5件)
-    const pendingJobs = await getPendingJobs(5);
+    // 保留中のジョブを取得 (最大2件に制限 - 処理時間短縮のため)
+    const pendingJobs = await getPendingJobs(2);
     console.log(`Found ${pendingJobs.length} pending jobs to process`);
     
     if (pendingJobs.length === 0) {
@@ -44,14 +47,13 @@ export async function GET(request: NextRequest) {
           await updateJobStatus(job.id, 'processing');
           
           // 最適化されたプロンプトを作成
-          const optimizedContent = `前回のクイズと似た関連テーマで新しいクイズを作成してください。
-元クイズID: ${job.metadata.originalQuizId}
+          const optimizedContent = `短い新しいクイズをまとめて作成してください。
+テーマ: ${job.metadata.title}
 問題数: ${job.metadata.numQuestions}
 難易度: ${job.metadata.difficulty}
 
-元の問題からテーマと種類を維持しつつ、新しい問題を生成してください。
-回答選択肢は単純かつ簡潔にしてください。
-結果をJSON形式で返してください。`;
+回答選択肢は短くしてください。クイズのみが必要です。
+JSON形式で「questions」配列のみ返してください。`;
           
           // Claude AIを使用してクイズデータを生成
           const difficulty = job.metadata.difficulty as Difficulty;

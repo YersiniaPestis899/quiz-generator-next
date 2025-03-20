@@ -4,6 +4,8 @@ import { getUserIdOrAnonymousId } from '@/lib/auth';
 
 // これは実際の実装です - Supabaseからデータを取得
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/quizzes
  * ユーザー別クイズ取得API
