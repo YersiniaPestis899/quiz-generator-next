@@ -51,7 +51,18 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
     setIsGeneratingSimilar(true);
     setSaveMessage(null);
     
+    // タイムアウト処理の追加
+    const timeoutMs = 39000; // 39秒（サーバー側のタイムアウトより短く設定）
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     try {
+      // タイムアウトの設定
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('クイズ生成がタイムアウトしました。より簡単な問題をお試しください。'));
+        }, timeoutMs);
+      });
+      
       // まず現在のクイズを保存する
       await handleSaveQuiz(false); // メッセージを表示しないモードで保存
       
@@ -68,8 +79,8 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
       
       const newTitle = `${baseTitle} ${nextNumber}`;
       
-      // APIを通じて似た問題を生成
-      const response = await fetch('/api/generate', {
+      // Promise.raceでタイムアウト処理と実際のAPI呼び出しを競合させる
+      const responsePromise = fetch('/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -82,6 +93,12 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
           similarToQuiz: quiz // 元クイズをパラメータとして渡す
         }),
       });
+      
+      // タイムアウト処理とAPI呼び出しを競合させる
+      const response = await Promise.race([responsePromise, timeoutPromise]);
+      
+      // タイムアウトが発生しなかった場合はタイマーをクリア
+      if (timeoutId) clearTimeout(timeoutId);
       
       if (!response.ok) {
         let errorMessage = '似たようなクイズの生成に失敗しました';
@@ -131,8 +148,12 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
       
     } catch (err: any) {
       console.error('似たようなクイズ生成エラー:', err);
+      
+      // タイムアウトがまだ設定されている場合はクリア
+      if (timeoutId) clearTimeout(timeoutId);
+      
       setSaveMessage({
-        text: '似たようなクイズの生成に失敗しました: ' + err.message,
+        text: err.message || '似たようなクイズの生成に失敗しました',
         type: 'error'
       });
     } finally {

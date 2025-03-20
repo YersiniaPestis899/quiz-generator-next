@@ -55,17 +55,16 @@ export async function POST(request: NextRequest) {
     if (similarToQuiz) {
       console.log('API: Creating similar quiz based on existing quiz');
       try {
+        // タイムアウト設定はAWSクライアントで設定されている（39秒）
+        console.log('API: Starting similar quiz generation with AWS SDK timeout settings');
+        
         // 元クイズの情報を使用して似たようなクイズを生成
-        const quizData = await Promise.race([
-          generateQuizWithClaude({ 
-            title, 
-            content: `元のクイズ: ${similarToQuiz.title}\n\nテーマや難易度を似たような内容で、新たな問題${numQuestions}問を生成してください。元クイズとほぼ同じジャンルですが、全く同じ問題ではなく、バリエーションを加えてください。\n\n${content}`, 
-            numQuestions, 
-            difficulty 
-          }),
-          // 40秒のタイムアウトを設定 (デフォルトは60秒の可能性がある)
-          new Promise((_, reject) => setTimeout(() => reject(new Error('クイズ生成がタイムアウトしました。より簡単な問題をお試しください。')), 40000))
-        ]);
+        const quizData = await generateQuizWithClaude({ 
+          title, 
+          content: `元のクイズ: ${similarToQuiz.title}\n\nテーマや難易度を似たような内容で、新たな問題${numQuestions}問を生成してください。元クイズとほぼ同じジャンルですが、全く同じ問題ではなく、バリエーションを加えてください。\n\n${content}`, 
+          numQuestions, 
+          difficulty 
+        });
         
         // クイズオブジェクト作成
         const quizId = uuidv4();
@@ -91,10 +90,28 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         // 似たようなクイズ生成での特定エラー処理
         console.error('Similar quiz generation error:', error);
+        
+        // エラーの詳細情報をログに出力
+        const errorDetail = {
+          message: error instanceof Error ? error.message : '不明なエラー',
+          name: error instanceof Error ? error.name : 'エラー',
+          stack: error instanceof Error ? error.stack : null,
+          toString: String(error)
+        };
+        console.error('Detailed error information:', JSON.stringify(errorDetail, null, 2));
+        
+        // タイムアウトが疑われる場合のメッセージ
+        let errorMessage = error instanceof Error ? error.message : '似たような問題の生成に失敗しました';
+        
+        // タイムアウトや通信エラーのような場合は、より具体的なメッセージを追加
+        if (errorMessage.includes('timeout') || errorMessage.includes('タイムアウト') ||
+            errorMessage.includes('ECONNRESET') || errorMessage.includes('network') ||
+            errorMessage.includes('connection')) {
+          errorMessage = 'タイムアウトエラー: クイズ生成に時間がかかりすぎました。問題の数を減らすか、より簡単なコンテンツでお試しください。';
+        }
+        
         return NextResponse.json(
-          { 
-            message: error instanceof Error ? error.message : '似たような問題の生成に失敗しました' 
-          }, 
+          { message: errorMessage }, 
           { status: 500 }
         );
       }

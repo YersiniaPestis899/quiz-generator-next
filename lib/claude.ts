@@ -12,7 +12,9 @@ function getBedrockClient() {
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-      }
+      },
+      // タイムアウト設定を増加（ミリ秒単位）
+      requestTimeout: 39000 // 39秒に設定（40秒未満に設定）
     });
   }
   return bedrockClient;
