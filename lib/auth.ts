@@ -6,7 +6,7 @@ import { getUserIdFromCookie, saveUserIdToCookie, clearUserIdCookie } from './co
  * 認証済みの場合のみユーザーIDを返し、それ以外はnullを返す
  * @returns 認証済みユーザーIDまたはnull
  */
-export async function getCurrentUserId() {
+async function getCurrentUserId() {
   try {
     const { data, error } = await supabase.auth.getSession();
     
@@ -25,7 +25,7 @@ export async function getCurrentUserId() {
  * 認証済みユーザーIDのみを取得する単純化関数
  * 匿名ユーザー識別は行わない - 認証済みユーザーのみサポート
  */
-export async function getUserId() {
+async function getUserId() {
   try {
     // 認証済みセッションからのみIDを取得
     const userId = await getCurrentUserId();
@@ -120,32 +120,11 @@ const getUserIdOrAnonymousId = async () => {
   }
 }
 
-// Make sure all functions are explicitly exported
-// Create a separate index export to ensure all functions are available
-const auth = {
-  getCurrentUserId,
-  getUserId,
-  getUserIdOrAnonymousId,
-  isAuthenticated,
-  clearAuthState
-};
-
-export { 
-  getCurrentUserId,
-  getUserId,
-  getUserIdOrAnonymousId,
-  isAuthenticated,
-  clearAuthState 
-};
-
-// Default export as fallback
-export default auth;
-
 /**
  * 認証状態を確認し、認証済みの場合はtrueを返す
  * @returns 認証状態のブール値
  */
-export async function isAuthenticated() {
+async function isAuthenticated() {
   const userId = await getCurrentUserId();
   return !!userId;
 }
@@ -154,7 +133,7 @@ export async function isAuthenticated() {
  * 認証関連の状態をクリア
  * ログアウト時に呼び出す
  */
-export function clearAuthState() {
+function clearAuthState() {
   console.log('認証状態クリアプロセスを実行中...');
   try {
     if (typeof window !== 'undefined') {
@@ -169,3 +148,24 @@ export function clearAuthState() {
     console.error('認証状態クリア中のエラー:', error);
   }
 }
+
+// Create a single consolidated export to avoid duplication
+const auth = {
+  getCurrentUserId,
+  getUserId,
+  getUserIdOrAnonymousId,
+  isAuthenticated,
+  clearAuthState
+};
+
+// Only export once via named exports
+export { 
+  getCurrentUserId,
+  getUserId,
+  getUserIdOrAnonymousId,
+  isAuthenticated,
+  clearAuthState 
+};
+
+// Also provide a default export for flexibility
+export default auth;
