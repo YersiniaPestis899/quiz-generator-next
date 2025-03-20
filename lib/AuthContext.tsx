@@ -61,71 +61,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initSession();
   }, []);
 
-  // Google認証でのサインイン
+  // Google認証でのサインイン - 堅牢性強化版
   const signInWithGoogle = async () => {
     try {
-      console.log('認証フロー開始: Google OAuth');
+      console.log('認証フロー診断モード開始: Google OAuth');
       
-      // サイトURLを環境変数から取得、なければ現在のオリジンを使用
-      const siteUrl = typeof window !== 'undefined' && window.ENV_VARS?.SITE_URL
-        ? window.ENV_VARS.SITE_URL
-        : typeof window !== 'undefined' ? window.location.origin : '';
+      // 環境変数アクセスの堅牢化
+      const getEnvVar = (key: string, fallback: string = '') => {
+        // 1. クライアントサイド環境変数オブジェクト
+        if (typeof window !== 'undefined' && window.ENV_VARS && window.ENV_VARS[key]) {
+          return window.ENV_VARS[key];
+        }
+        // 2. Next.js 環境変数
+        const envKey = `NEXT_PUBLIC_${key}`;
+        if (typeof process !== 'undefined' && process.env && process.env[envKey]) {
+          return process.env[envKey];
+        }
+        // 3. 現在のオリジン
+        if (typeof window !== 'undefined' && key === 'SITE_URL') {
+          return window.location.origin;
+        }
+        return fallback;
+      };
       
-      // 環境に応じて適切なコールバックURLを選択
-      // 本番環境とローカル環境で分岐
-      let redirectUrl: string;
-      if (siteUrl.includes('vercel.app') || siteUrl.includes('quiz-generator-next')) {
-        // Vercel環境用の代替コールバックパス
-        redirectUrl = `${siteUrl}/api/auth/callback`;
-        console.log('本番環境用代替コールバックパスを使用:', redirectUrl);
-      } else {
-        // ローカル環境用の標準コールバックパス
-        redirectUrl = `${siteUrl}/auth/callback`;
-        console.log('ローカル環境用標準コールバックパスを使用:', redirectUrl);
-      }
+      // サイトURLを複数のソースから冗長的に取得
+      const siteUrl = getEnvVar('SITE_URL', typeof window !== 'undefined' ? window.location.origin : '');
       
-      console.log('認証リダイレクトURL:', redirectUrl);
+      console.log('認証サイト基盤URL:', siteUrl);
       
-      // 開発環境かどうか確認
-      const isDevelopment = typeof window !== 'undefined' && 
-        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      // API転送コールバックURLへの統一
+      const redirectUrl = `${siteUrl}/api/auth/callback`;
+      console.log('認証リダイレクトベクトル (最適化):', redirectUrl);
       
-      // SupabaseのOAuth認証メソッドを実行
+      // Supabase認証リクエストパラメータの最適化
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
           queryParams: {
-            prompt: 'select_account',  // 常にアカウント選択を表示
+            prompt: 'select_account',
           },
-          skipBrowserRedirect: false,  // ブラウザの自動リダイレクトを有効化
+          // 明示的にブラウザリダイレクトを指定
+          skipBrowserRedirect: false,
         },
       });
       
       if (error) {
-        console.error('Google認証エラー:', error);
+        console.error('Google認証初期化障害:', error);
         throw error;
       } else if (data?.url) {
-        console.log('認証プロバイダーへのリダイレクトURL:', data.url);
+        console.log('プロバイダーリダイレクトURL生成成功:', 
+                 data.url.substring(0, data.url.indexOf('?')) + '?...');
         
-        // 本番環境での追加的なセキュリティ対策
-        if (!isDevelopment) {
-          // 短い遅延を入れてリダイレクト
-          // これによりブラウザがクッキーを適切に処理する時間を確保
-          setTimeout(() => {
-            window.location.href = data.url;
-          }, 100);
-        } else {
-          // 開発環境では通常通りリダイレクト
-          window.location.href = data.url;
-        }
+        // 環境に依存しない標準化されたリダイレクト手順
+        window.location.href = data.url;
       } else {
-        console.error('認証データが不完全です:', data);
-        throw new Error('認証プロセスの開始に失敗しました');
+        console.error('認証データ構造異常:', data);
+        throw new Error('認証プロセス初期化障害');
       }
     } catch (err) {
-      console.error('認証処理エラー:', err);
-      throw err; // エラーを上位呼び出し元に伝播
+      console.error('認証サブシステム例外:', err);
+      throw err;
     }
   };
 
