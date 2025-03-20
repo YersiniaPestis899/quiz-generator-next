@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     // クエリパラメータ分析
     const searchParams = requestUrl.searchParams;
     const code = searchParams.get('code');
-    const error = searchParams.get('error');
+    const errorParam = searchParams.get('error');
     const errorDescription = searchParams.get('error_description');
     const state = searchParams.get('state'); // OAuth状態トークン
     
@@ -29,15 +29,15 @@ export async function GET(request: NextRequest) {
       queryString: requestUrl.search,
       allParams: Object.fromEntries(searchParams.entries()),
       hasCode: !!code,
-      hasError: !!error,
+      hasError: !!errorParam,
       hasState: !!state
     });
     
     // エラー状態の詳細ロギングと処理
-    if (error) {
-      console.error('認証プロバイダーエラー詳細:', { error, errorDescription });
+    if (errorParam) {
+      console.error('認証プロバイダーエラー詳細:', { errorParam, errorDescription });
       return NextResponse.redirect(
-        new URL(`/auth?error=provider_error&details=${encodeURIComponent(errorDescription || error)}`, requestUrl.origin)
+        new URL(`/auth?error=provider_error&details=${encodeURIComponent(errorDescription || errorParam)}`, requestUrl.origin)
       );
     }
     
@@ -151,11 +151,11 @@ export async function GET(request: NextRequest) {
     
     // 認証フロー完了 - ホームページへリダイレクト
     return NextResponse.redirect(new URL('/', requestUrl.origin));
-  } catch (error) {
+  } catch (err) {
     // 例外の構造化分析
-    const errorObj = error instanceof Error 
-      ? { message: error.message, stack: error.stack } 
-      : { raw: String(error) };
+    const errorObj = err instanceof Error 
+      ? { message: err.message, stack: err.stack } 
+      : { raw: String(err) };
       
     console.error('認証コールバック例外発生:', errorObj);
     
