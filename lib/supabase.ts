@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient as supabaseCreateClient } from '@supabase/supabase-js';
 import { Quiz } from './types';
 import { getUserIdOrAnonymousId } from './auth';
 import { saveQuizToLocalStorage, getQuizzesFromLocalStorage } from './localStorageUtils';
@@ -13,7 +13,10 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 // Supabaseクライアント初期化
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = supabaseCreateClient(supabaseUrl, supabaseKey);
+
+// Explicitly export createClient for external use
+export const createClient = supabaseCreateClient;
 
 // クイズデータを一時的に保存するためのインメモリストレージ
 // Supabase接続が利用できない場合のフォールバックとして使用

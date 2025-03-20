@@ -1,9 +1,12 @@
-import { createClient } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
 import { Quiz } from './types';
 
 // ジョブステータスの型定義
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+// 難易度の型定義（型の整合性のため）
+export type Difficulty = 'easy' | 'medium' | 'hard';
 
 // ジョブデータの型定義
 export interface JobData {
@@ -17,7 +20,7 @@ export interface JobData {
     originalQuizId: string;
     title: string;
     numQuestions: number;
-    difficulty: string;
+    difficulty: Difficulty;
     userId: string;
   };
 }
@@ -29,11 +32,10 @@ export async function createJob(metadata: {
   originalQuizId: string;
   title: string;
   numQuestions: number;
-  difficulty: string;
+  difficulty: Difficulty;
   userId: string;
 }): Promise<string> {
-  const supabase = createClient();
-  
+  // supabaseクライアントインスタンスを直接利用
   const jobId = uuidv4();
   const now = new Date().toISOString();
   
@@ -66,8 +68,7 @@ export async function updateJobStatus(
   status: JobStatus, 
   data?: { result?: Quiz; error?: string }
 ): Promise<void> {
-  const supabase = createClient();
-  
+  // supabaseクライアントインスタンスを直接利用
   const updateData: Partial<JobData> = {
     status,
     updatedAt: new Date().toISOString(),
@@ -89,8 +90,7 @@ export async function updateJobStatus(
  * ジョブの詳細を取得する
  */
 export async function getJob(jobId: string): Promise<JobData | null> {
-  const supabase = createClient();
-  
+  // supabaseクライアントインスタンスを直接利用
   const { data, error } = await supabase
     .from('quiz_generation_jobs')
     .select('*')
@@ -109,8 +109,7 @@ export async function getJob(jobId: string): Promise<JobData | null> {
  * 処理待ちのジョブを取得する
  */
 export async function getPendingJobs(limit: number = 5): Promise<JobData[]> {
-  const supabase = createClient();
-  
+  // supabaseクライアントインスタンスを直接利用
   const { data, error } = await supabase
     .from('quiz_generation_jobs')
     .select('*')

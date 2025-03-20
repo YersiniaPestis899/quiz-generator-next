@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPendingJobs, updateJobStatus } from '@/lib/jobs';
+import { getPendingJobs, updateJobStatus, Difficulty } from '@/lib/jobs';
 import { generateQuizWithClaude } from '@/lib/claude';
 import { saveQuiz } from '@/lib/supabase';
 import { v4 as uuidv4 } from 'uuid';
@@ -54,11 +54,18 @@ export async function GET(request: NextRequest) {
 結果をJSON形式で返してください。`;
           
           // Claude AIを使用してクイズデータを生成
+          const difficulty = job.metadata.difficulty as Difficulty;
+          // 文字列 -> 列挙型への型変換を確実に行う
+          const safeDifficulty: Difficulty = 
+            difficulty === 'easy' ? 'easy' :
+            difficulty === 'medium' ? 'medium' :
+            difficulty === 'hard' ? 'hard' : 'medium'; // デフォルトはmedium
+            
           const quizData = await generateQuizWithClaude({
             title: job.metadata.title,
             content: optimizedContent,
             numQuestions: job.metadata.numQuestions,
-            difficulty: job.metadata.difficulty
+            difficulty: safeDifficulty
           });
           
           // クイズオブジェクト作成
@@ -68,7 +75,7 @@ export async function GET(request: NextRequest) {
           const quiz = {
             id: quizId,
             title: job.metadata.title,
-            difficulty: job.metadata.difficulty,
+            difficulty: safeDifficulty, // 検証済みの値を使用
             questions: quizData.questions,
             created_at: timestamp,
             user_id: job.metadata.userId

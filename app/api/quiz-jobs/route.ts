@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createJob } from '@/lib/jobs';
+import { createJob, Difficulty } from '@/lib/jobs';
 import { Quiz } from '@/lib/types';
 import { getUserIdOrAnonymousId } from '@/lib/auth';
 
@@ -16,6 +16,11 @@ export async function POST(request: NextRequest) {
     console.log('API: Received quiz job creation request');
     const body = await request.json();
     const { title, numQuestions = 5, difficulty = 'medium', originalQuiz } = body;
+    
+    // 難易度を正しい型に変換
+    const validatedDifficulty: Difficulty = ['easy', 'medium', 'hard'].includes(difficulty) 
+      ? difficulty as Difficulty 
+      : 'medium';
     
     // 入力検証
     if (!title || !originalQuiz) {
@@ -38,7 +43,7 @@ export async function POST(request: NextRequest) {
       originalQuizId: originalQuiz.id,
       title,
       numQuestions,
-      difficulty,
+      difficulty: validatedDifficulty,
       userId
     };
     
