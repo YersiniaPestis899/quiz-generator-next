@@ -39,8 +39,110 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
   const [isGeneratingSimilar, setIsGeneratingSimilar] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
   
+  // ポーリング関連の状態
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  
   /**
-   * 似たようなクイズを生成するハンドラー
+   * ジョブの状態を定期的に確認するポーリング処理
+   */
+  useEffect(() => {
+    // ジョブIDがない場合はポーリングしない
+    if (!jobId) return;
+    
+    // すでにポーリングが開始されている場合はそのまま
+    if (pollingInterval) return;
+    
+    console.log(`ジョブID ${jobId} のポーリングを開始します`);
+    
+    // 3秒ごとにジョブの状態を確認
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/quiz-jobs/${jobId}`);
+        
+        if (!response.ok) {
+          throw new Error('ジョブ状態の取得に失敗しました');
+        }
+        
+        const jobStatus = await response.json();
+        console.log('ジョブ状態:', jobStatus);
+        
+        // ジョブの状態に応じた処理
+        if (jobStatus.status === 'completed' && jobStatus.result) {
+          // ポーリングを停止
+          clearInterval(interval);
+          setPollingInterval(null);
+          setJobId(null);
+          
+          // 結果のクイズを表示
+          if (onGenerateSimilar) {
+            console.log('生成完了したクイズを親コンポーネントに通知');
+            onGenerateSimilar(jobStatus.result);
+          }
+          
+          // 生成完了メッセージを表示
+          setSaveMessage({
+            text: `似たようなクイズ「${jobStatus.result.title}」を生成しました`,
+            type: 'success'
+          });
+          
+          // 生成中フラグをリセット
+          setIsGeneratingSimilar(false);
+          
+        } else if (jobStatus.status === 'failed') {
+          // ポーリングを停止
+          clearInterval(interval);
+          setPollingInterval(null);
+          setJobId(null);
+          
+          // エラーメッセージを表示
+          setSaveMessage({
+            text: `クイズ生成に失敗しました: ${jobStatus.error || '不明なエラー'}`,
+            type: 'error'
+          });
+          
+          // 生成中フラグをリセット
+          setIsGeneratingSimilar(false);
+          
+        } else if (jobStatus.status === 'pending' || jobStatus.status === 'processing') {
+          // 進行中の場合は状態メッセージを更新
+          if (jobStatus.progress) {
+            setSaveMessage({
+              text: `クイズ生成中... (${jobStatus.progress.elapsedSeconds}秒経過、残り約${jobStatus.progress.estimatedRemainingSeconds}秒)`,
+              type: 'success'
+            });
+          }
+        }
+        
+      } catch (error) {
+        console.error('ジョブ状態の確認に失敗:', error);
+        
+        // エラーが続く場合はポーリングを停止
+        clearInterval(interval);
+        setPollingInterval(null);
+        setJobId(null);
+        
+        setSaveMessage({
+          text: '処理状態の確認に失敗しました。もう一度お試しください。',
+          type: 'error'
+        });
+        
+        setIsGeneratingSimilar(false);
+      }
+    }, 3000);
+    
+    // インターバルを保存
+    setPollingInterval(interval);
+    
+    // クリーンアップ関数
+    return () => {
+      clearInterval(interval);
+      setPollingInterval(null);
+    };
+  }, [jobId, onGenerateSimilar]);
+  
+  /**
+   * 似たようなクイズを非同期ジョブで生成するハンドラー
    */
   const handleGenerateSimilarQuiz = async () => {
     // ボタンクリック音
@@ -51,13 +153,11 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
     setIsGeneratingSimilar(true);
     setSaveMessage(null);
     
-    // クライアント側の明示的タイムアウトを削除
-    // サーバー側でEdge RuntimeとmaxDurationが適切に設定されているため
-    
     try {
-      // 生成中メッセージを表示 - ユーザーに時間がかかることを明確に伝える
+      // 非同期ジョブとしてクイズ生成をリクエスト
+      // ジョブは即度作成され、バックグラウンドで処理されます
       setSaveMessage({
-        text: `似たようなクイズを生成中です。最大でも約60秒かかりますが、お待ちください...`,
+        text: `似たようなクイズ生成ジョブを登録中...`,
         type: 'success'
       });
       
@@ -77,84 +177,54 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
       
       const newTitle = `${baseTitle} ${nextNumber}`;
       
-      // サーバー側でEdge Runtimeを使用し、長時間の処理も可能に
-      const response = await fetch('/api/generate', {
+      // 非同期ジョブAPIを呼び出し
+      const response = await fetch('/api/quiz-jobs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           title: newTitle,
-          content: `元クイズ: ${quiz.title}\nこのクイズと同様の教育内容で始めから生成してください。`,
           numQuestions: quiz.questions.length,
           difficulty: quiz.difficulty,
-          similarToQuiz: quiz // 元クイズをパラメータとして渡す
+          originalQuiz: quiz // 元クイズをパラメータとして渡す
         }),
       });
       
       if (!response.ok) {
-        let errorMessage = '似たようなクイズの生成に失敗しました';
+        let errorMessage = '似たようなクイズの生成ジョブ登録に失敗しました';
         
         try {
-          // レスポンスがJSON形式か確認して解析
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
-          } else {
-            // JSONでない場合はテキストとして読み取る
-            const textError = await response.text();
-            console.error('非JSONエラーレスポンス:', textError.substring(0, 150) + '...');
-            // タイムアウトエラーか確認
-            if (response.status === 504 || textError.includes('timeout') || textError.includes('Timeout')) {
-              errorMessage = 'タイムアウトエラー: クイズ生成が時間切れで失敗しました。もう一度お試しください。';
-            }
-          }
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
         } catch (parseError) {
-          // JSON解析エラーの場合はデフォルトメッセージを使用
           console.error('レスポンス解析エラー:', parseError);
         }
         
         throw new Error(errorMessage);
       }
       
-      // 生成された新しいクイズを取得
-      const newQuiz = await response.json();
+      // ジョブ情報を取得
+      const jobData = await response.json();
+      console.log('ジョブ登録成功:', jobData);
       
-      // 成功メッセージを表示
+      // ジョブIDを保存してポーリングを開始
+      setJobId(jobData.jobId);
+      
+      // 登録成功メッセージを表示
       setSaveMessage({
-        text: `似たようなクイズ「${newTitle}」を生成しました`,
+        text: `クイズ生成ジョブを登録しました。処理状況を確認中です...`,
         type: 'success'
       });
       
-      // 親コンポーネントに新しいクイズを渡す
-      if (onGenerateSimilar) {
-        console.log('新しいクイズを親コンポーネントに通知');
-        onGenerateSimilar(newQuiz);
-      }
-      
-      // メッセージを数秒後に消す
-      setTimeout(() => {
-        setSaveMessage(null);
-      }, 3000);
-      
     } catch (err: any) {
-      console.error('似たようなクイズ生成エラー:', err);
-
-      // Edge Runtimeでも発生したエラーを適切に表示
-      const errorMsg = err.message || '似たようなクイズの生成に失敗しました';
-      
-      // エラーメッセージを改善
-      let displayError = errorMsg;
-      if (errorMsg.includes('timeout') || errorMsg.includes('タイムアウト')) {
-        displayError = 'Edge Runtimeでも処理時間が長すぎます。問題数を減らすか、内容を簡素化してお試しください。';
-      }
+      console.error('似たようなクイズ生成ジョブ登録エラー:', err);
       
       setSaveMessage({
-        text: displayError,
+        text: err.message || '似たようなクイズの生成ジョブ登録に失敗しました',
         type: 'error'
       });
-    } finally {
+      
       setIsGeneratingSimilar(false);
     }
   };
