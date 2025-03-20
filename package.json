@@ -1,0 +1,36 @@
+{
+  "name": "quiz-generator-next",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "seed": "node -r dotenv/config scripts/seed-quizzes.js",
+    "test:bedrock": "node -r dotenv/config scripts/test-bedrock.js",
+    "setup": "node -r dotenv/config scripts/create-readme.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.511.0",
+    "@supabase/auth-helpers-nextjs": "^0.9.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "dotenv": "^16.0.0",
+    "next": "14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.3",
+    "@types/react": "^18.2.42",
+    "@types/react-dom": "^18.2.17",
+    "@types/uuid": "^9.0.7",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.55.0",
+    "eslint-config-next": "14.0.3",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.2"
+  }
+}

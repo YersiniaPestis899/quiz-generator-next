@@ -1,0 +1,387 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    @apply bg-background text-text font-quiz min-h-screen;
+    background-image: radial-gradient(circle at center, rgba(95, 48, 226, 0.08) 0%, rgba(26, 26, 46, 0) 70%);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold text-text;
+  }
+}
+
+@layer components {
+  /* カード基本スタイル */
+  .card {
+    @apply bg-card rounded-lg shadow-quiz p-5 mb-6 border border-border/30;
+    transition: all 0.3s ease;
+  }
+  .card:hover {
+    @apply shadow-quiz-hover;
+  }
+
+  /* ボタンスタイル */
+  .btn {
+    @apply px-5 py-3 rounded-full font-semibold transition-all cursor-pointer shadow-md transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary text-white hover:bg-primary-hover disabled:bg-secondary/40 disabled:cursor-not-allowed;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .btn-primary::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: 0.5s;
+  }
+  
+  .btn-primary:hover::after {
+    left: 100%;
+  }
+
+  .btn-secondary {
+    @apply btn bg-secondary text-background hover:bg-secondary-hover disabled:opacity-70 disabled:cursor-not-allowed;
+  }
+
+  .btn-accent {
+    @apply btn bg-accent text-background hover:bg-accent-hover;
+  }
+
+  /* フォームスタイル */
+  .form-group {
+    @apply mb-4;
+    width: 100%;
+  }
+
+  .form-group label {
+    @apply block mb-2 font-medium text-text-accent;
+  }
+
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    @apply w-full p-3 border border-border bg-panel rounded-md text-base text-text focus:ring-2 focus:ring-primary focus:border-transparent;
+  }
+  
+  .textarea-container {
+    @apply w-full;
+  }
+
+  .form-row {
+    @apply flex gap-4 mb-4 w-full;
+  }
+
+  .form-row .form-group {
+    @apply flex-1;
+  }
+
+  .error {
+    @apply text-error mb-4 p-3 rounded-md bg-red-900/30 border border-error/40;
+  }
+
+  /* 読み込み状態表示 */
+  .loading {
+    @apply text-center p-8 text-text-secondary;
+  }
+  .loading::after {
+    content: "...";
+    animation: dots 1.5s steps(5, end) infinite;
+  }
+  @keyframes dots {
+    0%, 20% { content: "."; }
+    40% { content: ".."; }
+    60% { content: "..."; }
+    80%, 100% { content: ""; }
+  }
+
+  .empty-list {
+    @apply text-center p-8 text-text-secondary italic border border-dashed border-border/50 rounded-lg;
+  }
+  
+  /* クイズリスト */
+  .quiz-list {
+    @apply mb-8;
+  }
+
+  .quiz-list h3 {
+    @apply mb-4 text-text-accent text-xl;
+  }
+
+  .quiz-list ul {
+    @apply list-none space-y-3;
+  }
+
+  .quiz-item {
+    @apply bg-panel border border-border/50 rounded-lg p-4 cursor-pointer transition-all hover:border-primary/70 shadow-lg hover:shadow-quiz;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .quiz-item::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    height: 3px;
+    background: linear-gradient(90deg, #5f30e2, #00c2ff);
+    transform: scaleX(0);
+    transform-origin: 0 0;
+    transition: transform .5s ease;
+  }
+  
+  .quiz-item:hover::before {
+    transform: scaleX(1);
+  }
+
+  .quiz-item .title {
+    @apply font-semibold text-text;
+  }
+
+  .quiz-item .details {
+    @apply flex gap-4 mt-2 text-text-secondary text-sm;
+  }
+
+  /* プレースホルダー */
+  .placeholder {
+    @apply text-center p-16 bg-card rounded-lg shadow-lg border border-border/30;
+    background-image: radial-gradient(circle at 50% 30%, rgba(95, 48, 226, 0.15), transparent 70%);
+  }
+
+  .placeholder h2 {
+    @apply mb-4 text-text-accent text-2xl;
+  }
+
+  /* プログレスバー */
+  .progress-bar {
+    @apply h-3 bg-border/30 rounded-full mb-4 overflow-hidden;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .progress {
+    @apply h-full bg-primary transition-all duration-500 ease-in-out;
+    background-image: linear-gradient(45deg, rgba(255,255,255,.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.15) 50%, rgba(255,255,255,.15) 75%, transparent 75%, transparent);
+    background-size: 1rem 1rem;
+    animation: progress-animation 1s linear infinite;
+  }
+  
+  @keyframes progress-animation {
+    from { background-position: 1rem 0; }
+    to { background-position: 0 0; }
+  }
+
+  /* 質問表示 */
+  .question-number {
+    @apply text-sm text-text-secondary mb-4;
+  }
+
+  .question {
+    @apply mb-8 p-6 bg-panel rounded-xl shadow-question border border-accent/30;
+    animation: question-appear 0.5s ease-out;
+  }
+  
+  @keyframes question-appear {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .question h3 {
+    @apply mb-6 text-xl md:text-2xl font-bold text-text;
+    text-shadow: 0 0 10px rgba(0, 194, 255, 0.3);
+  }
+
+  /* 回答選択肢 */
+  .answers {
+    @apply flex flex-col gap-4;
+  }
+
+  .answer {
+    @apply p-5 border-2 border-border/50 rounded-lg cursor-pointer transition-all shadow-answer;
+    background: linear-gradient(145deg, #252548, #1f1f3d);
+    animation: answer-appear 0.5s ease-out forwards;
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  
+  .answer:nth-child(1) { animation-delay: 0.1s; }
+  .answer:nth-child(2) { animation-delay: 0.2s; }
+  .answer:nth-child(3) { animation-delay: 0.3s; }
+  .answer:nth-child(4) { animation-delay: 0.4s; }
+  
+  @keyframes answer-appear {
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .answer:hover {
+    @apply border-secondary bg-panel shadow-answer-hover;
+    transform: translateY(-2px);
+  }
+
+  .answer.selected {
+    @apply border-primary bg-primary/10 shadow-answer-selected;
+    position: relative;
+  }
+  
+  .answer.selected::after {
+    content: '✓';
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.2rem;
+    color: #5f30e2;
+    font-weight: bold;
+  }
+
+  /* ナビゲーション */
+  .navigation {
+    @apply flex justify-between mt-8;
+  }
+
+  /* クイズ結果 */
+  .quiz-results {
+    @apply bg-card rounded-xl shadow-result p-8 border border-border/40;
+    animation: results-appear 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  
+  @keyframes results-appear {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .quiz-results h2 {
+    @apply mb-6 text-center text-2xl text-text-accent;
+  }
+
+  .score-display {
+    @apply flex justify-center items-center gap-8 mb-8 p-4 rounded-lg bg-panel/50;
+  }
+
+  .score-display .score {
+    @apply text-xl font-semibold text-text-secondary;
+  }
+
+  .score-display .percentage {
+    @apply text-3xl font-bold text-primary;
+    text-shadow: 0 0 10px rgba(95, 48, 226, 0.5);
+  }
+
+  /* 質問レビュー */
+  .questions-review {
+    @apply mb-8 space-y-4;
+  }
+
+  .question-review {
+    @apply p-5 rounded-lg mb-4 bg-panel/70;
+    transition: all 0.3s ease;
+  }
+
+  .question-review.correct {
+    @apply bg-green-900/20 border-l-4 border-success;
+  }
+
+  .question-review.incorrect {
+    @apply bg-red-900/20 border-l-4 border-error;
+  }
+
+  .question-review .question-number {
+    @apply font-semibold mb-2 text-text-accent;
+  }
+
+  .question-review .explanation {
+    @apply mt-3 pt-3 border-t border-border/30 italic text-text-secondary;
+  }
+
+  /* 解説コンテナースタイル */
+  .answer-explanations-container {
+    @apply mt-4 flex flex-col gap-2;
+  }
+
+  /* 選択肢の解説アイテム */
+  .answer-explanation-container {
+    @apply rounded-lg overflow-hidden transition-all duration-300;
+  }
+
+  /* 正解選択肢のスタイル */
+  .answer-explanation-container.correct {
+    @apply bg-green-900/10 border-l-4 border-success;
+  }
+
+  /* 不正解選択肢のスタイル */
+  .answer-explanation-container.incorrect {
+    @apply bg-red-900/10 border-l-4 border-error;
+  }
+
+  /* 選択肢ラベル */
+  .answer-label {
+    @apply flex justify-between items-center p-3 cursor-pointer font-medium hover:bg-white/5;
+  }
+
+  /* 選択肢テキスト */
+  .answer-text {
+    @apply flex items-center gap-2;
+  }
+
+  /* 正解/不正解バッジ */
+  .answer-badge {
+    @apply inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold;
+  }
+
+  .answer-badge.correct {
+    @apply bg-success text-white;
+  }
+
+  .answer-badge.incorrect {
+    @apply bg-error text-white;
+  }
+
+  /* 展開アイコン */
+  .expand-icon {
+    @apply text-xs opacity-70 transition-transform;
+  }
+
+  /* 解説コンテンツ */
+  .explanation-content {
+    @apply p-3;
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .explanation-title {
+    @apply font-semibold mb-2 text-sm text-text-accent;
+  }
+
+  .explanation-text {
+    @apply text-sm leading-relaxed text-text-secondary;
+  }
+
+  /* 説明関連の追加スタイル */
+  .explanation-loading {
+    @apply py-2 px-3 my-2 bg-blue-900/30 text-blue-400 rounded-md text-sm animate-pulse;
+  }
+  
+  .generate-explanation-btn {
+    @apply mt-4 py-1.5 px-3 bg-primary/20 text-primary hover:bg-primary/30 rounded-md text-sm font-medium transition-colors block w-full text-center;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}

@@ -1,0 +1,122 @@
+/* 正答率に応じた結果表示スタイル */
+/* パーフェクトスコア (100%) */
+.quiz-results.perfect-score {
+  background: linear-gradient(145deg, rgba(41, 25, 92, 0.8) 0%, rgba(35, 22, 81, 0.9) 100%);
+  border: 2px solid gold;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.3);
+  animation: perfect-glow 3s infinite alternate;
+}
+
+@keyframes perfect-glow {
+  0% {
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 25px rgba(255, 215, 0, 0.7), 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.perfect-badge {
+  background: linear-gradient(45deg, #FFD700, #FFC107);
+  color: #000;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 800;
+  padding: 0.5rem 2rem;
+  border-radius: 30px;
+  margin: 0 auto 1.5rem;
+  display: inline-block;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+  animation: badge-pulse 2s infinite;
+  transform: rotate(-5deg);
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: rotate(-5deg) scale(1);
+  }
+  50% {
+    transform: rotate(-5deg) scale(1.05);
+  }
+}
+
+.perfect-score-message {
+  color: gold;
+  font-size: 1.5rem;
+  text-align: center;
+  margin: 1rem 0 2rem;
+  font-weight: 600;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+/* 低スコア (50%未満) */
+.quiz-results.low-score {
+  background: linear-gradient(145deg, rgba(30, 19, 66, 0.8) 0%, rgba(23, 15, 54, 0.9) 100%);
+  border: 1px solid #6C22BD;
+  box-shadow: 0 0 15px rgba(108, 34, 189, 0.2), 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.low-score-message {
+  color: #8D44E0;
+  font-size: 1.3rem;
+  text-align: center;
+  margin: 1rem 0 2rem;
+  font-style: italic;
+}
+
+/* パーフェクト紙吹雪のスタイル */
+.perfect-confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+.perfect-confetti {
+  position: absolute;
+  animation: perfect-confetti-fall 5s linear forwards;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.perfect-confetti.star {
+  animation: star-fall 6s ease-in forwards, star-rotate 3s linear infinite;
+}
+
+@keyframes perfect-confetti-fall {
+  0% {
+    transform: translateY(-20px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100vh + 20px)) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes star-fall {
+  0% {
+    transform: translateY(-50px) scale(1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(calc(100vh + 50px)) scale(0.5);
+    opacity: 0;
+  }
+}
+
+@keyframes star-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
