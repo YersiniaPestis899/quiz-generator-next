@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getQuizzes, getQuiz, addUserIdColumnIfNeeded, getCommunityQuizzes, searchMyQuizzes } from '@/lib/supabase';
-import { getUserIdOrAnonymousId } from '@/lib/auth';
+import { getCurrentUserId } from '@/lib/auth';
 
 // これは実際の実装です - Supabaseからデータを取得
 
@@ -26,20 +26,25 @@ export async function GET(request: NextRequest) {
     const columnCheck = await addUserIdColumnIfNeeded();
     console.log('Column check result:', columnCheck);
 
-    // 現在のユーザーIDを取得（優先順位: 明示的なuserID > 匿名ID > 自動取得）
-    console.log('API: Getting user ID...');
+    // 現在のユーザーIDを取得
+    // 単純化: 認証済みユーザーのみサポート
+    console.log('API: Getting authenticated user ID...');
     let currentUserId;
     if (userId) {
       console.log('API: Using provided userId:', userId);
       currentUserId = userId;
-    } else if (anonymousId) {
-      console.log('API: Using provided anonymousId:', anonymousId);
-      currentUserId = anonymousId;
     } else {
-      console.log('API: No ID provided, getting from auth context');
-      currentUserId = await getUserIdOrAnonymousId();
+      console.log('API: Getting from auth session');
+      currentUserId = await getCurrentUserId();
     }
-    console.log('User ID for query:', currentUserId);
+    
+    // 認証されていない場合は空の配列を返す
+    if (!currentUserId) {
+      console.log('認証されていないユーザー - 空の結果を返します');
+      return NextResponse.json([], { status: 200 });
+    }
+    
+    console.log('Authenticated User ID for query:', currentUserId);
     
     // IDが指定されている場合は特定のクイズを取得
     if (idParam) {

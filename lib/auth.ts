@@ -1,9 +1,10 @@
 import { supabase } from './supabase';
-import { getUserIdFromCookie, saveUserIdToCookie, clearUserIdCookie } from './cookieUtils';
+import { clearUserIdCookie } from './cookieUtils';
 
 /**
- * 現在のセッションのユーザーIDを取得
- * @returns ユーザーIDまたはnull
+ * 現在の認証済みセッションのユーザーIDを取得
+ * 認証済みの場合のみユーザーIDを返し、それ以外はnullを返す
+ * @returns 認証済みユーザーIDまたはnull
  */
 export async function getCurrentUserId() {
   try {
@@ -15,128 +16,58 @@ export async function getCurrentUserId() {
     
     return data.session.user.id;
   } catch (error) {
-    console.error('Error getting current user session:', error);
+    console.error('認証セッション取得エラー:', error);
     return null;
   }
 }
 
 /**
- * セッションのユーザーID、または匿名ユーザー識別子を取得
- * 認証していない場合はクッキーやローカルストレージに保存されたID、
- * またはランダムIDを生成して返す
- * ユーザー識別の優先順位: 認証済みセッション > クッキー > ローカルストレージ > 新規生成
+ * 認証済みユーザーIDのみを取得する単純化関数
+ * 匿名ユーザー識別は行わない - 認証済みユーザーのみサポート
  */
-export async function getUserIdOrAnonymousId() {
+export async function getUserId() {
   try {
-    // まず認証済みセッションを確認（最優先）
+    // 認証済みセッションからのみIDを取得
     const userId = await getCurrentUserId();
     if (userId) {
-      console.log('認証セッションからユーザーIDを取得:', userId);
-      // 認証済みIDをクッキーとローカルストレージに保存して同期
-      saveUserIdToCookie(userId);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('anonymousUserId', userId);
-        } catch (e) {
-          console.error('ローカルストレージへの保存に失敗:', e);
-        }
-      }
+      console.log('認証済みユーザーID:', userId);
       return userId;
     }
     
-    // 次にクッキーを確認
-    const cookieUserId = getUserIdFromCookie();
-    if (cookieUserId) {
-      console.log('クッキーからユーザーIDを取得:', cookieUserId);
-      // ローカルストレージにも同期して一貫性を確保
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('anonymousUserId', cookieUserId);
-        } catch (e) {
-          console.error('ローカルストレージへの保存に失敗:', e);
-        }
-      }
-      return cookieUserId;
-    }
-    
-    // 次にローカルストレージを確認
-    if (typeof window !== 'undefined') {
-      try {
-        const storageUserId = localStorage.getItem('anonymousUserId');
-        if (storageUserId) {
-          console.log('ローカルストレージからユーザーIDを取得:', storageUserId);
-          // クッキーにも保存して一貫性を確保
-          saveUserIdToCookie(storageUserId);
-          return storageUserId;
-        }
-      } catch (e) {
-        console.error('ローカルストレージアクセスエラー:', e);
-      }
-    }
-    
-    // 新規ID生成（両方の保存先に保存）
-    const newUserId = `anon_${Math.random().toString(36).substring(2, 15)}`;
-    console.log('新規ユーザーIDを生成:', newUserId);
-    
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('anonymousUserId', newUserId);
-      } catch (e) {
-        console.error('ローカルストレージへの保存に失敗:', e);
-      }
-    }
-    
-    saveUserIdToCookie(newUserId);
-    return newUserId;
-  } catch (error) {
-    console.error('Error in getUserIdOrAnonymousId:', error);
-    // エラー発生時も一時的なIDを返す
-    const tempId = `anon_error_${Math.random().toString(36).substring(2, 15)}`;
-    return tempId;
-  }
-}
-
-/**
- * APIリクエストのクエリパラメータから匿名IDを取得
- * @param requestUrl - リクエストURL
- */
-export function getAnonymousIdFromRequest(requestUrl: string) {
-  try {
-    const url = new URL(requestUrl);
-    const anonymousId = url.searchParams.get('anonymousId');
-    
-    if (anonymousId && anonymousId.startsWith('anon_')) {
-      return anonymousId;
-    }
-    
+    // 認証されていない場合はnullを返す
+    console.log('認証されていないユーザー - 機能制限あり');
     return null;
   } catch (error) {
-    console.error('Error parsing request URL:', error);
+    console.error('ユーザーID取得エラー:', error);
     return null;
   }
 }
 
 /**
- * 匿名ユーザーIDをクリア
- * ログイン後やログアウト時に呼び出す
+ * 認証状態を確認し、認証済みの場合はtrueを返す
+ * @returns 認証状態のブール値
  */
-export function clearAnonymousId() {
-  console.log('匿名ID消去プロセスを実行中...');
+export async function isAuthenticated() {
+  const userId = await getCurrentUserId();
+  return !!userId;
+}
+
+/**
+ * 認証関連の状態をクリア
+ * ログアウト時に呼び出す
+ */
+export function clearAuthState() {
+  console.log('認証状態クリアプロセスを実行中...');
   try {
     if (typeof window !== 'undefined') {
-      // 消去前に現在の匿名IDを保存
-      const currentAnonymousId = localStorage.getItem('anonymousUserId');
-      if (currentAnonymousId && currentAnonymousId.startsWith('anon_')) {
-        localStorage.setItem('old_anonymous_id', currentAnonymousId);
-        console.log('参照用に古い匿名IDを保存:', currentAnonymousId);
-      }
-      
-      // 現在の匿名IDを削除
+      // ローカルストレージからの認証関連データ削除
       localStorage.removeItem('anonymousUserId');
-      console.log('localStorageから匿名IDを削除しました');
+      localStorage.removeItem('old_anonymous_id');
+      console.log('認証関連のローカルストレージデータを削除しました');
     }
+    // クッキーの削除
     clearUserIdCookie();
   } catch (error) {
-    console.error('localStorageでの匿名ID管理に失敗:', error);
+    console.error('認証状態クリア中のエラー:', error);
   }
 }
