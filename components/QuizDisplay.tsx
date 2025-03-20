@@ -154,42 +154,53 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
     setSaveMessage(null);
     
     try {
-      // 非同期ジョブとしてクイズ生成をリクエスト
-      // ジョブは即度作成され、バックグラウンドで処理されます
-      setSaveMessage({
-        text: `似たようなクイズ生成ジョブを登録中...`,
-        type: 'success'
-      });
-      
-      // まず現在のクイズを保存する
-      await handleSaveQuiz(false); // メッセージを表示しないモードで保存
-      
-      // 次に新しいタイトルを生成
-      // タイトルから数字を取り出す
-      const baseTitle = quiz.title.replace(/\s*\d+$/, '');
-      const match = quiz.title.match(/(\d+)$/);
-      let nextNumber = 2; // デフォルトは2番から開始
-      
-      if (match) {
-        // 数字が見つかった場合はその次の数字を使用
-        nextNumber = parseInt(match[1], 10) + 1;
-      }
-      
-      const newTitle = `${baseTitle} ${nextNumber}`;
-      
-      // 非同期ジョブAPIを呼び出し
-      const response = await fetch('/api/quiz-jobs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: newTitle,
-          numQuestions: quiz.questions.length,
-          difficulty: quiz.difficulty,
-          originalQuiz: quiz // 元クイズをパラメータとして渡す
-        }),
-      });
+    // 非同期ジョブとしてクイズ生成をリクエスト
+    // ジョブは即度作成され、バックグラウンドで処理されます
+    setSaveMessage({
+    text: `似たようなクイズ生成ジョブを登録中...`,
+    type: 'success'
+    });
+    
+    // まず現在のクイズを保存する
+    await handleSaveQuiz(false); // メッセージを表示しないモードで保存
+    
+    // 次に新しいタイトルを生成
+    // タイトルから数字を取り出す
+    const baseTitle = quiz.title.replace(/\s*\d+$/, '');
+    const match = quiz.title.match(/(\d+)$/);
+    let nextNumber = 2; // デフォルトは2番から開始
+    
+    if (match) {
+    // 数字が見つかった場合はその次の数字を使用
+    nextNumber = parseInt(match[1], 10) + 1;
+    }
+    
+    const newTitle = `${baseTitle} ${nextNumber}`;
+    
+    // リクエストボディの作成
+    const requestBody = {
+    title: newTitle,
+    numQuestions: quiz.questions.length,
+    difficulty: quiz.difficulty || 'medium', // デフォルト値を追加
+    originalQuiz: {
+      id: quiz.id,
+    title: quiz.title,
+    // 他の必要なフィールドを含むように細心の注意を払う
+    difficulty: quiz.difficulty || 'medium',
+    questions: quiz.questions.slice(0, 3) // リクエストサイズを削減するために最初の3問のみを送信
+    }
+    };
+        
+        console.log('ジョブ登録リクエスト:', requestBody);
+        
+        // 非同期ジョブAPIを呼び出し
+        const response = await fetch('/api/quiz-jobs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        });
       
       if (!response.ok) {
         let errorMessage = '似たようなクイズの生成ジョブ登録に失敗しました';

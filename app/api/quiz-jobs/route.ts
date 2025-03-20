@@ -3,8 +3,11 @@ import { createJob, Difficulty } from '@/lib/jobs';
 import { Quiz } from '@/lib/types';
 import { getUserIdOrAnonymousId } from '@/lib/auth';
 
-// 即時応答を返すためEdge関数の実行環境を指定
-export const runtime = 'edge';
+// 動的ルーティングを有効化
+export const dynamic = 'force-dynamic';
+
+// Edgeランタイムは不要です、Node.jsランタイムを使用
+// export const runtime = 'edge';
 
 /**
  * POST /api/quiz-jobs
@@ -14,7 +17,19 @@ export async function POST(request: NextRequest) {
   try {
     // リクエストボディからパラメータを取得
     console.log('API: Received quiz job creation request');
-    const body = await request.json();
+    
+    // リクエストボディの解析をtry-catchで保護
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      console.error('Request body parse error:', parseError);
+      return NextResponse.json(
+        { message: '無効なリクエスト形式です' },
+        { status: 400 }
+      );
+    }
+    
     const { title, numQuestions = 5, difficulty = 'medium', originalQuiz } = body;
     
     // 難易度を正しい型に変換
@@ -31,12 +46,9 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // URLからユーザーの匿名IDを抽出
-    const url = new URL(request.url);
-    const anonymousId = url.searchParams.get('anonymousId');
-    
-    // 現在のユーザーIDを取得
-    const userId = anonymousId || await getUserIdOrAnonymousId();
+    // ユーザーIDを直接取得する方式に変更、URL解析は避ける
+    const userId = await getUserIdOrAnonymousId();
+    console.log('Using user ID:', userId);
     
     // ジョブメタデータを準備
     const jobMetadata = {
@@ -61,6 +73,16 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     console.error('Error creating quiz job:', error);
+    
+    // エラーを詳細にログ出力
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause
+      });
+    }
     
     // エラーオブジェクトの安全な処理
     const errorMessage = error instanceof Error ? error.message : '不明なエラー';
