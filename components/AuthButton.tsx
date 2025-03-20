@@ -75,9 +75,10 @@ export default function AuthButton() {
     try {
       setIsProcessing(true);
       await signInWithGoogle();
+      // ログインボタン押下後も処理中表示を維持
+      // リダイレクトまで処理中表示のまま
     } catch (error) {
       console.error('ログイン処理エラー:', error);
-    } finally {
       setIsProcessing(false);
     }
   };

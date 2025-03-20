@@ -1,13 +1,35 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/AuthContext';
 import AuthButton from '@/components/AuthButton';
 
 export default function AuthPage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [error, setError] = useState<string | null>(null);
+  
+  // エラーパラメータの処理
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      switch (errorParam) {
+        case 'missing_code':
+          setError('認証コードが見つかりませんでした。もう一度お試しください。');
+          break;
+        case 'auth_failed':
+          setError('認証処理に失敗しました。もう一度お試しください。');
+          break;
+        case 'provider_error':
+          setError('Google認証サービスとの通信に問題が発生しました。');
+          break;
+        default:
+          setError('認証中にエラーが発生しました。もう一度お試しください。');
+      }
+    }
+  }, [searchParams]);
   
   // ログイン済みの場合はホームにリダイレクト
   useEffect(() => {
@@ -23,9 +45,15 @@ export default function AuthPage() {
           アカウント認証
         </h1>
         
-        <p className="mb-8 text-text-secondary text-center">
+        <p className="mb-4 text-text-secondary text-center">
           Googleアカウントでログインすると、クイズの履歴が永続的に保存され、異なるデバイスでも学習の進捗を確認できます。
         </p>
+        
+        {error && (
+          <div className="mb-4 p-3 bg-red-900/30 text-red-300 border border-red-500/30 rounded-lg text-center">
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
         
         <div className="flex flex-col items-center space-y-8">
           <div className="bg-background/50 p-5 rounded-xl w-full">

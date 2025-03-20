@@ -15,11 +15,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/auth?error=missing_code', request.url));
   }
   
-  // Supabaseクライアントを初期化
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-  
   try {
+    // Supabaseクライアントを初期化
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    
     // 認証コードを使用してセッションを交換
     await supabase.auth.exchangeCodeForSession(code);
     
