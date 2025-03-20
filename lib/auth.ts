@@ -130,12 +130,31 @@ async function isAuthenticated() {
 }
 
 /**
- * 廃止予定: 化名ユーザーIDをクリアする関数
- * 後方互換性のために維持
- * clearAuthStateと同じ機能を提供
+ * 化名ユーザーIDをクリアする関数
+ * AuthContextから呼び出される
  */
 function clearAnonymousId() {
-  return clearAuthState();
+  console.log('化名ユーザーIDクリアプロセスを開始...');
+  try {
+    if (typeof window !== 'undefined') {
+      // 元の化名IDを保管しておく
+      const currentId = localStorage.getItem('anonymousUserId');
+      if (currentId && currentId.startsWith('anon_')) {
+        localStorage.setItem('old_anonymous_id', currentId);
+        console.log('化名IDをバックアップとして保存:', currentId);
+      }
+      
+      // ローカルストレージからの化名データ削除
+      localStorage.removeItem('anonymousUserId');
+      console.log('化名ユーザーIDを削除しました');
+    }
+    // クッキーの削除
+    clearUserIdCookie();
+    console.log('化名ユーザーIDが正常にクリアされました');
+  } catch (error) {
+    console.error('化名IDクリア中のエラー:', error);
+  }
+  return true;
 }
 
 /**

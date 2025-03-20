@@ -63,10 +63,44 @@ export default function AuthButton() {
     }
   };
   
-  // ログイン直後に移行処理を実行
+  // ユーザー認証状態の分析と回復処理
+  const checkAndRepairAuthentication = async () => {
+    try {
+      console.log('認証状態の分析と修復を実行中...');
+      
+      // 可能な限り多くの認証状態データをログ出力
+      const authCookiePresent = document.cookie.includes('sb-auth');
+      const anonymousIdPresent = Boolean(localStorage.getItem('anonymousUserId'));
+      const oldAnonymousIdPresent = Boolean(localStorage.getItem('old_anonymous_id'));
+      const quizCookiePresent = document.cookie.includes('quiz_generator_user_id');
+      
+      console.log('認証状態診断', {
+        authCookiePresent,
+        anonymousIdPresent,
+        oldAnonymousIdPresent,
+        quizCookiePresent,
+        userObject: user ? '存在する' : '存在しない'
+      });
+      
+      // ログイン失敗同期完了問題の特定条件を検出
+      const hasAuthenticationIssue = !user && authCookiePresent && anonymousIdPresent;
+      
+      if (hasAuthenticationIssue) {
+        console.log('認証状態の不整合を検出しました。状態のリセットを実行します');
+        clearAnonymousId();
+      }
+    } catch (error) {
+      console.error('認証状態チェックエラー:', error);
+    }
+  };
+
+  // ログイン直後に移行処理と認証状態の診断を実行
   useEffect(() => {
     if (user) {
       migrateAnonymousData();
+    } else {
+      // ユーザーが存在しない場合は認証状態の異常をチェック
+      checkAndRepairAuthentication();
     }
   }, [user]);
 
