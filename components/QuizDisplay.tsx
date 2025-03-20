@@ -51,16 +51,14 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
     setIsGeneratingSimilar(true);
     setSaveMessage(null);
     
-    // タイムアウト処理の追加
-    const timeoutMs = 39000; // 39秒（サーバー側のタイムアウトより短く設定）
-    let timeoutId: NodeJS.Timeout | null = null;
+    // クライアント側の明示的タイムアウトを削除
+    // サーバー側でEdge RuntimeとmaxDurationが適切に設定されているため
     
     try {
-      // タイムアウトの設定
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error('クイズ生成がタイムアウトしました。より簡単な問題をお試しください。'));
-        }, timeoutMs);
+      // 生成中メッセージを表示
+      setSaveMessage({
+        text: `似たようなクイズを生成中です。しばらくお待ちください...`,
+        type: 'success'
       });
       
       // まず現在のクイズを保存する
@@ -79,8 +77,8 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
       
       const newTitle = `${baseTitle} ${nextNumber}`;
       
-      // Promise.raceでタイムアウト処理と実際のAPI呼び出しを競合させる
-      const responsePromise = fetch('/api/generate', {
+      // サーバー側でEdge Runtimeを使用し、長時間の処理も可能に
+      const response = await fetch('/api/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,12 +91,6 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
           similarToQuiz: quiz // 元クイズをパラメータとして渡す
         }),
       });
-      
-      // タイムアウト処理とAPI呼び出しを競合させる
-      const response = await Promise.race([responsePromise, timeoutPromise]);
-      
-      // タイムアウトが発生しなかった場合はタイマーをクリア
-      if (timeoutId) clearTimeout(timeoutId);
       
       if (!response.ok) {
         let errorMessage = '似たようなクイズの生成に失敗しました';
@@ -148,12 +140,18 @@ export default function QuizDisplay({ quiz, onQuizSaved, onGenerateSimilar }: Qu
       
     } catch (err: any) {
       console.error('似たようなクイズ生成エラー:', err);
+
+      // Edge Runtimeでも発生したエラーを適切に表示
+      const errorMsg = err.message || '似たようなクイズの生成に失敗しました';
       
-      // タイムアウトがまだ設定されている場合はクリア
-      if (timeoutId) clearTimeout(timeoutId);
+      // エラーメッセージを改善
+      let displayError = errorMsg;
+      if (errorMsg.includes('timeout') || errorMsg.includes('タイムアウト')) {
+        displayError = 'Edge Runtimeでも処理時間が長すぎます。問題数を減らすか、内容を簡素化してお試しください。';
+      }
       
       setSaveMessage({
-        text: err.message || '似たようなクイズの生成に失敗しました',
+        text: displayError,
         type: 'error'
       });
     } finally {

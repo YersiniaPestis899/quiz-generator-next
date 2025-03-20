@@ -6,6 +6,11 @@ import { QuizGenerationInput, Quiz } from '@/lib/types';
 // Import named export directly to ensure type safety
 import { getUserIdOrAnonymousId } from '@/lib/auth';
 
+// Edge Runtimeを有効化し、長時間実行を可能にする
+export const runtime = 'edge';
+// 最大実行時間を明示的に設定
+export const maxDuration = 60;
+
 // これは実際の実装です - AWS Bedrock Claude 3.5 Sonnetを使用
 
 /**
@@ -55,8 +60,8 @@ export async function POST(request: NextRequest) {
     if (similarToQuiz) {
       console.log('API: Creating similar quiz based on existing quiz');
       try {
-        // タイムアウト設定はAWSクライアントで設定されている（39秒）
-        console.log('API: Starting similar quiz generation with AWS SDK timeout settings');
+        // Edge RuntimeとmaxDurationで最大実行時間が拡張されたことをログに記録
+        console.log('API: Starting similar quiz generation with extended execution time (Edge Runtime + maxDuration: 60s)');
         
         // 元クイズの情報を使用して似たようなクイズを生成
         const quizData = await generateQuizWithClaude({ 
