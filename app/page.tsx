@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { QuizListHandle } from '@/components/QuizList';
+import { useState, useRef, useCallback } from 'react';
 import ContentUploader from '@/components/ContentUploader';
 import QuizDisplay from '@/components/QuizDisplay';
 import QuizList from '@/components/QuizList';
@@ -11,15 +10,15 @@ import { Quiz } from '@/lib/types';
 export default function Home() {
   const [activeQuiz, setActiveQuiz] = useState<Quiz | null>(null);
   const quizDisplayRef = useRef<HTMLDivElement>(null);
-  const quizListRef = useRef<QuizListHandle>(null);
+  // 状態変数でリロードトリガーを管理
+  const [forceReload, setForceReload] = useState(0);
   
   // クイズリストを更新する関数
-  const refreshQuizList = () => {
-    // quizListRefがセットされていればfetchQuizzesを呼び出す
-    if (quizListRef.current) {
-      quizListRef.current.fetchQuizzes();
-    }
-  };
+  const refreshQuizList = useCallback(() => {
+    console.log('クイズリスト強制リロードをトリガー');
+    // 強制リロードをトリガー
+    setForceReload(prev => prev + 1);
+  }, []);
   
   // クイズ選択時に表示エリアにスクロールする関数
   const handleQuizSelect = (quiz: Quiz) => {
@@ -51,9 +50,9 @@ export default function Home() {
           </div>
           <div className="lg:w-3/5 xl:w-2/3">
           <QuizList 
-              ref={quizListRef} 
-              onSelectQuiz={handleQuizSelect} 
-            />
+          key={forceReload} // キーを変更してリロードを強制
+          onSelectQuiz={handleQuizSelect} 
+          />
             <div ref={quizDisplayRef} className="mt-6">
               {activeQuiz ? (
                 <div className="quiz-container p-1">

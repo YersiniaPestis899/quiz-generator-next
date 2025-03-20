@@ -77,6 +77,7 @@ export default function QuizDisplay({ quiz, onQuizSaved }: QuizDisplayProps) {
       
       // クイズリストを更新するため、保存完了を通知
       if (onQuizSaved) {
+        console.log('保存成功通知: QuizDisplay -> 親コンポーネント');
         onQuizSaved();
       }
       

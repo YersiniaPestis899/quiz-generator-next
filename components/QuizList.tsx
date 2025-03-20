@@ -7,18 +7,23 @@ import { useAnonymous } from '@/lib/AnonymousContext';
 
 interface QuizListProps {
   onSelectQuiz: (quiz: Quiz) => void;
+  onRefreshRequest?: () => void; // 更新要求があったときに呼び出されるコールバック
 }
 
 /**
  * クイズリストコンポーネント - 簡素化版
  * 単一リストでクイズを表示（タブなし）
  */
-// 外部から参照できるメソッドの型定義
-export interface QuizListHandle {
-  fetchQuizzes: (search?: string) => Promise<void>;
+// 注: refを使用せず、propsベースでリスト更新を実装
+
+// 外部から更新をトリガーするための関数を公開
+export function refreshQuizList(callback: () => void) {
+  if (callback) {
+    callback();
+  }
 }
 
-const QuizList = forwardRef<QuizListHandle, QuizListProps>(({ onSelectQuiz }, ref) => {
+export default function QuizList({ onSelectQuiz, onRefreshRequest }: QuizListProps) {
   const { anonymousId } = useAnonymous();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +40,7 @@ const QuizList = forwardRef<QuizListHandle, QuizListProps>(({ onSelectQuiz }, re
 
   // クイズ取得関数 - すべてのクイズを取得
   const fetchQuizzes = async (search?: string) => {
+    console.log('クイズリストのfetchQuizzesが呼び出されました', search);
     try {
       setLoading(true);
       setError(null);
@@ -78,6 +84,7 @@ const QuizList = forwardRef<QuizListHandle, QuizListProps>(({ onSelectQuiz }, re
 
   // 初回マウント時とanonymousId変更時にクイズを取得
   useEffect(() => {
+    console.log('クイズリスト useEffect 発火', { anonymousId });
     if (anonymousId) {
       fetchQuizzes();
     }
@@ -103,10 +110,15 @@ const QuizList = forwardRef<QuizListHandle, QuizListProps>(({ onSelectQuiz }, re
     );
   }
   
-  // 外部から fetchQuizzes を呼び出せるようにする
-  useImperativeHandle(ref, () => ({
-    fetchQuizzes
-  }));
+  // 更新リクエストハンドラー - 外部からの更新指示を処理
+  useEffect(() => {
+    if (onRefreshRequest) {
+      onRefreshRequest = () => {
+        console.log('クイズリスト更新リクエストハンドラー');
+        fetchQuizzes();
+      };
+    }
+  }, []);
 
   return (
     <div className="card">
@@ -166,6 +178,5 @@ const QuizList = forwardRef<QuizListHandle, QuizListProps>(({ onSelectQuiz }, re
       )}
     </div>
   );
-});
-
-export default QuizList;
+);
+}

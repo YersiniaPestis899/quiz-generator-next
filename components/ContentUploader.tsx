@@ -125,6 +125,7 @@ export default function ContentUploader({ onQuizGenerated, onQuizSaved }: Conten
         
         // クイズリストの更新を通知
         if (onQuizSaved) {
+          console.log('保存成功通知: ContentUploader -> 親コンポーネント');
           onQuizSaved();
         }
         
@@ -156,6 +157,7 @@ export default function ContentUploader({ onQuizGenerated, onQuizSaved }: Conten
         
         // クイズリストの更新を通知
         if (onQuizSaved) {
+          console.log('保存成功通知: ContentUploader -> 親コンポーネント');
           onQuizSaved();
         }
         
