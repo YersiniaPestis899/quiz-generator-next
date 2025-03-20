@@ -66,35 +66,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('認証フロー開始: Google OAuth');
       
-      // カレントオリジンを確認
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const redirectUrl = `${origin}/auth/callback`;
+      // サイトURLを環境変数から取得、なければ現在のオリジンを使用
+      const siteUrl = typeof window !== 'undefined' && window.ENV_VARS?.SITE_URL
+        ? window.ENV_VARS.SITE_URL
+        : typeof window !== 'undefined' ? window.location.origin : '';
+      
+      // 環境に応じて適切なコールバックURLを選択
+      // 本番環境とローカル環境で分岐
+      let redirectUrl: string;
+      if (siteUrl.includes('vercel.app') || siteUrl.includes('quiz-generator-next')) {
+        // Vercel環境用の代替コールバックパス
+        redirectUrl = `${siteUrl}/api/auth/callback`;
+        console.log('本番環境用代替コールバックパスを使用:', redirectUrl);
+      } else {
+        // ローカル環境用の標準コールバックパス
+        redirectUrl = `${siteUrl}/auth/callback`;
+        console.log('ローカル環境用標準コールバックパスを使用:', redirectUrl);
+      }
       
       console.log('認証リダイレクトURL:', redirectUrl);
       
+      // 開発環境かどうか確認
+      const isDevelopment = typeof window !== 'undefined' && 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      
+      // SupabaseのOAuth認証メソッドを実行
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
           queryParams: {
-            // オプションで追加パラメータを指定可能
-            // access_type: 'offline', // リフレッシュトークンを取得する場合
             prompt: 'select_account',  // 常にアカウント選択を表示
-          }
+          },
+          skipBrowserRedirect: false,  // ブラウザの自動リダイレクトを有効化
         },
       });
       
       if (error) {
         console.error('Google認証エラー:', error);
+        throw error;
       } else if (data?.url) {
         console.log('認証プロバイダーへのリダイレクトURL:', data.url);
-        // プロバイダーURLへのリダイレクトを手動で実行
-        window.location.href = data.url;
+        
+        // 本番環境での追加的なセキュリティ対策
+        if (!isDevelopment) {
+          // 短い遅延を入れてリダイレクト
+          // これによりブラウザがクッキーを適切に処理する時間を確保
+          setTimeout(() => {
+            window.location.href = data.url;
+          }, 100);
+        } else {
+          // 開発環境では通常通りリダイレクト
+          window.location.href = data.url;
+        }
       } else {
         console.error('認証データが不完全です:', data);
+        throw new Error('認証プロセスの開始に失敗しました');
       }
     } catch (err) {
       console.error('認証処理エラー:', err);
+      throw err; // エラーを上位呼び出し元に伝播
     }
   };
 

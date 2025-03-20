@@ -27,6 +27,7 @@ export const config = {
     // - favicon.ico (favicon file)
     // - api/ routes that don't require authentication
     // - auth/callback (OAuth callback URL that should be handled separately)
-    '/((?!_next/static|_next/image|favicon.ico|api/check-environment|auth/callback).*)',
+    // - api/auth/callback (Alternative OAuth callback URL)
+    '/((?!_next/static|_next/image|favicon.ico|api/check-environment|api/auth/callback|auth/callback).*)',
   ],
 };
