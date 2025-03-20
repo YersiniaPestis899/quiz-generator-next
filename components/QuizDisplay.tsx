@@ -33,7 +33,63 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
   const [playLowScoreSound, setPlayLowScoreSound] = useState(false);
   const [playCountdownSound, setPlayCountdownSound] = useState(false);
   const [playButtonClickSound, setPlayButtonClickSound] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{text: string, type: 'success' | 'error'} | null>(null);
   
+  /**
+   * クイズを保存するハンドラー
+   */
+  const handleSaveQuiz = async () => {
+    // ボタンクリック音
+    setPlayButtonClickSound(true);
+    setTimeout(() => setPlayButtonClickSound(false), 300);
+    
+    setIsSaving(true);
+    setSaveMessage(null);
+    
+    try {
+      // /api/generateエンドポイントを再利用してクイズを保存
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: quiz.title,
+          content: `保存用: ${quiz.title}`,
+          numQuestions: quiz.questions.length,
+          difficulty: quiz.difficulty,
+          existingQuiz: quiz // 既存のクイズデータを送信
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'クイズの保存に失敗しました');
+      }
+      
+      // 成功メッセージを表示
+      setSaveMessage({
+        text: 'クイズを保存しました',
+        type: 'success'
+      });
+      
+      // 3秒後にメッセージを消す
+      setTimeout(() => {
+        setSaveMessage(null);
+      }, 3000);
+      
+    } catch (err: any) {
+      console.error('クイズ保存エラー:', err);
+      setSaveMessage({
+        text: '保存に失敗しました: ' + err.message,
+        type: 'error'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // クイズデータが無効な場合のフォールバック表示
   if (!quiz || !quiz.questions || quiz.questions.length === 0) {
     return (
@@ -447,9 +503,25 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
             })}
           </div>
           
-          <button className="btn-primary w-full mt-4" onClick={restartQuiz}>
-            もう一度挑戦する
-          </button>
+          <div className="flex space-x-4 mt-4">
+            <button className="btn-primary flex-1" onClick={restartQuiz}>
+              もう一度挑戦する
+            </button>
+            
+            <button 
+              className="btn-accent flex-1"
+              onClick={handleSaveQuiz}
+              disabled={isSaving}
+            >
+              {isSaving ? '保存中...' : 'クイズを保存'}
+            </button>
+          </div>
+          
+          {saveMessage && (
+            <div className={`mt-3 p-2 text-center rounded ${saveMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {saveMessage.text}
+            </div>
+          )}
           
           {/* スタイルを適用 */}
           <style jsx>{answerExplanationsStyle}</style>
@@ -534,6 +606,22 @@ export default function QuizDisplay({ quiz }: QuizDisplayProps) {
             {currentQuestion < quiz.questions.length - 1 ? '次の問題' : '結果を見る'}
           </button>
         </div>
+        
+        <div className="mt-4 flex justify-center">
+          <button 
+            className="btn-accent"
+            onClick={handleSaveQuiz}
+            disabled={isSaving}
+          >
+            {isSaving ? '保存中...' : 'クイズを保存'}
+          </button>
+        </div>
+        
+        {saveMessage && (
+          <div className={`mt-3 p-2 text-center rounded ${saveMessage.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+            {saveMessage.text}
+          </div>
+        )}
       </div>
     </>
   );

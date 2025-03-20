@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     // リクエストボディからパラメータを取得
     console.log('API: Received quiz generation request');
     const body = await request.json();
-    const { title, content, numQuestions = 5, difficulty = 'medium' }: QuizGenerationInput = body;
+    const { title, content, numQuestions = 5, difficulty = 'medium', existingQuiz }: QuizGenerationInput & { existingQuiz?: Quiz} = body;
     
     console.log(`API: Processing quiz request: "${title}" with ${numQuestions} questions at ${difficulty} difficulty`);
     
@@ -48,6 +48,24 @@ export async function POST(request: NextRequest) {
       accessKeyId: awsKey ? '設定あり' : '未設定',
       secretAccessKey: awsSecret ? '設定あり' : '未設定'
     });
+    
+    // 既存のクイズが指定されている場合は、そのまま再保存する
+    if (existingQuiz) {
+      console.log('API: Using existing quiz data for saving');
+      // クイズオブジェクト作成
+      const quiz = {
+        ...existingQuiz,
+        user_id: userId  // ユーザーIDを更新
+      };
+      
+      // Supabaseに保存
+      console.log('API: Saving existing quiz to Supabase...');
+      await saveQuiz(quiz);
+      console.log('API: Quiz saved successfully!');
+      
+      // 成功レスポンスを返す
+      return NextResponse.json(quiz);
+    }
     
     console.log('API: Calling Claude 3.5 Sonnet to generate quiz...');
     // Claude 3.5 Sonnetを使用してクイズデータを生成
