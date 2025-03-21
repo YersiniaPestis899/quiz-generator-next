@@ -24,17 +24,17 @@ async function getBedrockClient() {
           console.log('Edge Runtime環境を検出しました。適切なタイムアウト設定を適用します');
           const { FetchHttpHandler } = await import('@smithy/fetch-http-handler');
           clientConfig.requestHandler = new FetchHttpHandler({
-            requestTimeout: 59000, // Edge Runtimeのタイムアウト設定: 59秒
+            requestTimeout: 25000, // Edge Runtimeのタイムアウト設定: 25秒
           });
         } else {
           // 通常のNode.js環境
           const { NodeHttpHandler } = await import('@smithy/node-http-handler');
           clientConfig.requestHandler = new NodeHttpHandler({
-            connectionTimeout: 59000, // 接続確立のタイムアウト: 59秒
-            socketTimeout: 59000,     // データ送受信のタイムアウト: 59秒
+            connectionTimeout: 25000, // 接続確立のタイムアウト: 25秒
+            socketTimeout: 25000,     // データ送受信のタイムアウト: 25秒
           });
         }
-        console.log('カスタムタイムアウト設定が適用されました: 59秒');
+        console.log('カスタムタイムアウト設定が適用されました: 25秒');
       }
     } catch (error) {
       console.warn('NodeHttpHandlerのインポートに失敗しました。デフォルトのタイムアウト設定を使用します:', error);
@@ -65,9 +65,9 @@ export async function generateQuizWithClaude(input: QuizGenerationInput) {
     
     // 問題数に応じて最大トークン数を調整
     // 基本トークン数 + 問題数に応じた追加トークン
-    const baseTokens = 4000;
-    const tokensPerQuestion = 500; // 1問あたりの推定トークン数
-    const maxTokens = Math.min(baseTokens + (numQuestions * tokensPerQuestion), 8000);
+    const baseTokens = 3000;
+    const tokensPerQuestion = 400; // 1問あたりの推定トークン数
+    const maxTokens = Math.min(baseTokens + (numQuestions * tokensPerQuestion), 4000); // 最大値を8000から4000に削減
     
     // AWS Bedrockを使用してClaude呼び出し
     // アクセス権限が確認された Claude 3.5 Sonnet モデルを使用

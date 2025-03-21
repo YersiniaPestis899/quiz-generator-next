@@ -134,40 +134,76 @@ export default function ContentUploader({ onQuizGenerated, onQuizSaved }: Conten
         setContent('');
       } else {
         // 従来の処理（少ない問題数の場合）- 匿名IDをクエリパラメータとして追加
-        const response = await fetch(`/api/generate?anonymousId=${encodeURIComponent(anonymousId)}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            title,
-            content,
-            numQuestions,
-            difficulty
-          }),
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 55000); // 55秒でタイムアウト
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'クイズ生成に失敗しました');
+        try {
+          const response = await fetch(`/api/generate?anonymousId=${encodeURIComponent(anonymousId)}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              title,
+              content,
+              numQuestions,
+              difficulty
+            }),
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            // レスポンスのステータスコードに基づく処理
+            if (response.status === 504) {
+              throw new Error('タイムアウト: クイズ生成に時間がかかりすぎました。問題数を減らすか、より短いコンテンツでお試しください。');
+            }
+            
+            // JSONとしてのパースを試みる
+            let errorData;
+            try {
+              errorData = await response.json();
+            } catch (jsonError) {
+              // JSONパースに失敗した場合はテキストで取得
+              const textError = await response.text();
+              throw new Error(textError || `HTTPエラー ${response.status}`);
+            }
+            
+            throw new Error(errorData.message || 'クイズ生成に失敗しました');
+          }
+          
+          const quiz = await response.json();
+          onQuizGenerated(quiz);
+          
+          // クイズリストの更新を通知
+          if (onQuizSaved) {
+            console.log('保存成功通知: ContentUploader -> 親コンポーネント');
+            onQuizSaved();
+          }
+          
+          // フォームをリセット
+          setTitle('');
+          setContent('');
+        } catch (fetchError: any) {
+          // AbortControllerによるタイムアウト
+          if (fetchError.name === 'AbortError') {
+            throw new Error('タイムアウト: クイズ生成に時間がかかりすぎました。問題数を減らすか、より短いコンテンツでお試しください。');
+          }
+          throw fetchError;
+        } finally {
+          clearTimeout(timeoutId);
         }
-        
-        const quiz = await response.json();
-        onQuizGenerated(quiz);
-        
-        // クイズリストの更新を通知
-        if (onQuizSaved) {
-          console.log('保存成功通知: ContentUploader -> 親コンポーネント');
-          onQuizSaved();
-        }
-        
-        // フォームをリセット
-        setTitle('');
-        setContent('');
       }
     } catch (err: any) {
       console.error('クイズ生成エラー:', err);
-      setError('クイズの生成に失敗しました: ' + err.message);
+      
+      // タイムアウトエラーの特別処理
+      if (err.message && (err.message.includes('timeout') || err.message.includes('504') || err.message === 'Failed to fetch')) {
+        setError('タイムアウトエラー: クイズ生成に時間がかかりすぎました。問題数を減らすか、より短いコンテンツでお試しください。');
+      } else {
+        setError('クイズの生成に失敗しました: ' + err.message);
+      }
     } finally {
       setLoading(false);
       setGenerationProgress(null);
@@ -240,13 +276,9 @@ export default function ContentUploader({ onQuizGenerated, onQuizSaved }: Conten
               <option value="4">4問</option>
               <option value="5">5問</option>
               <option value="6">6問</option>
-              <option value="7">7問</option>
-              <option value="8">8問</option>
-              <option value="9">9問</option>
-              <option value="10">10問</option>
             </select>
             <div className="input-helper-text text-xs">
-              {numQuestions > 6 ? "多い問題数は生成に時間がかかります" : ""}
+              少ない問題数ほど生成が速くなります
             </div>
           </div>
           

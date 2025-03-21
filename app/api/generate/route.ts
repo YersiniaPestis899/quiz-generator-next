@@ -11,7 +11,7 @@ export const runtime = 'edge';
 
 // Next.js App Routerの新しい構文で最大実行時間を設定
 // 注: これはEdge Functionsにも適用されます
-export const maxDuration = 60;
+export const maxDuration = 30; // Vercelの制限に合わせて1分から30秒に短縮
 
 // これは実際の実装です - AWS Bedrock Claude 3.5 Sonnetを使用
 
