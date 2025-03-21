@@ -135,7 +135,7 @@ export default function ContentUploader({ onQuizGenerated, onQuizSaved }: Conten
       } else {
         // 従来の処理（少ない問題数の場合）- 匿名IDをクエリパラメータとして追加
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 55000); // 55秒でタイムアウト
+        const timeoutId = setTimeout(() => controller.abort(), 58000); // 58秒でタイムアウト（Serverless Functionの最大実行時間に合わせる）
         
         try {
           const response = await fetch(`/api/generate?anonymousId=${encodeURIComponent(anonymousId)}`, {

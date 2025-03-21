@@ -1,8 +1,9 @@
 {
   "regions": ["iad1"],
   "functions": {
-    "app/api/generate/**": {
+    "app/api/generate/route.ts": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": []
 }

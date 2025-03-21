@@ -9,35 +9,27 @@ async function getBedrockClient() {
   if (!bedrockClient && typeof process !== 'undefined') {
     // 基本設定オブジェクト
     const clientConfig: any = { 
-      region: process.env.AWS_REGION || 'us-west-2',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-      }
+    region: process.env.AWS_REGION || 'us-west-2',
+    credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
+    }
     };
     
     try {
-      // NodeHttpHandlerをNode.js環境でのみ動的にインポート
-      if (typeof window === 'undefined') { // ブラウザではなくNode.js環境
-        // Edge Runtime環境ではFetchHttpHandlerが適切
-        if (process.env.NEXT_RUNTIME === 'edge') {
-          console.log('Edge Runtime環境を検出しました。適切なタイムアウト設定を適用します');
-          const { FetchHttpHandler } = await import('@smithy/fetch-http-handler');
-          clientConfig.requestHandler = new FetchHttpHandler({
-            requestTimeout: 25000, // Edge Runtimeのタイムアウト設定: 25秒
-          });
-        } else {
-          // 通常のNode.js環境
-          const { NodeHttpHandler } = await import('@smithy/node-http-handler');
-          clientConfig.requestHandler = new NodeHttpHandler({
-            connectionTimeout: 25000, // 接続確立のタイムアウト: 25秒
-            socketTimeout: 25000,     // データ送受信のタイムアウト: 25秒
-          });
-        }
-        console.log('カスタムタイムアウト設定が適用されました: 25秒');
-      }
+    // NodeHttpHandlerをNode.js環境でのみ動的にインポート
+    if (typeof window === 'undefined') { // ブラウザではなくNode.js環境
+    // Serverless Functions環境用のNodeHttpHandler設定
+    console.log('Serverless Functions環境向けタイムアウト設定を適用します');
+    const { NodeHttpHandler } = await import('@smithy/node-http-handler');
+    clientConfig.requestHandler = new NodeHttpHandler({
+    connectionTimeout: 50000, // 接続確立のタイムアウト: 50秒
+    socketTimeout: 50000,     // データ送受信のタイムアウト: 50秒
+    });
+    console.log('カスタムタイムアウト設定が適用されました: 50秒');
+    }
     } catch (error) {
-      console.warn('NodeHttpHandlerのインポートに失敗しました。デフォルトのタイムアウト設定を使用します:', error);
+    console.warn('NodeHttpHandlerのインポートに失敗しました。デフォルトのタイムアウト設定を使用します:', error);
     }
     
     // クライアント初期化
@@ -64,10 +56,10 @@ export async function generateQuizWithClaude(input: QuizGenerationInput) {
     const prompt = buildQuizPrompt(content, numQuestions, difficulty);
     
     // 問題数に応じて最大トークン数を調整
-    // 基本トークン数 + 問題数に応じた追加トークン
-    const baseTokens = 3000;
-    const tokensPerQuestion = 400; // 1問あたりの推定トークン数
-    const maxTokens = Math.min(baseTokens + (numQuestions * tokensPerQuestion), 4000); // 最大値を8000から4000に削減
+    // Serverless Functions環境でも処理時間を短縮するために最適化
+    const baseTokens = 2500;
+    const tokensPerQuestion = 350; // 1問あたりの推定トークン数を縮小
+    const maxTokens = Math.min(baseTokens + (numQuestions * tokensPerQuestion), 5000); // 適切なトークン上限を設定
     
     // AWS Bedrockを使用してClaude呼び出し
     // アクセス権限が確認された Claude 3.5 Sonnet モデルを使用

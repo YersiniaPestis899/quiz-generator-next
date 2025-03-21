@@ -6,12 +6,11 @@ import { QuizGenerationInput, Quiz } from '@/lib/types';
 // Import named export directly to ensure type safety
 import { getUserIdOrAnonymousId } from '@/lib/auth';
 
-// Edge Runtimeを有効化し、長時間実行を可能にする
-export const runtime = 'edge';
-
-// Next.js App Routerの新しい構文で最大実行時間を設定
-// 注: これはEdge Functionsにも適用されます
-export const maxDuration = 30; // Vercelの制限に合わせて1分から30秒に短縮
+// Edge Runtimeは削除し、Serverless Functions環境を使用
+// Next.js App RouterでServerless Functionsの最大実行時間を設定
+export const config = {
+  maxDuration: 60 // Serverless Functionsでは60秒まで延長可能
+};
 
 // これは実際の実装です - AWS Bedrock Claude 3.5 Sonnetを使用
 
