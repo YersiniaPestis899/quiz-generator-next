@@ -6,11 +6,9 @@ import { QuizGenerationInput, Quiz } from '@/lib/types';
 // Import named export directly to ensure type safety
 import { getUserIdOrAnonymousId } from '@/lib/auth';
 
-// Edge Runtimeは削除し、Serverless Functions環境を使用
-// Next.js App RouterでServerless Functionsの最大実行時間を設定
-export const config = {
-  maxDuration: 60 // Serverless Functionsでは60秒まで延長可能
-};
+// Serverless Functions向けの正しい設定方法
+export const runtime = 'nodejs'; // 'edge' | 'nodejs'
+export const dynamic = 'force-dynamic'; // 動的レスポンスを強制
 
 // これは実際の実装です - AWS Bedrock Claude 3.5 Sonnetを使用
 

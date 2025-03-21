@@ -6,6 +6,10 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['@aws-sdk/client-bedrock-runtime'],
   },
+  // Serverless Functionsの実行時間を拡張
+  serverRuntimeConfig: {
+    maxDuration: 60, // 60秒
+  },
 };
 
 export default nextConfig;

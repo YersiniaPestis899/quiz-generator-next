@@ -198,9 +198,22 @@ export default function ContentUploader({ onQuizGenerated, onQuizSaved }: Conten
     } catch (err: any) {
       console.error('クイズ生成エラー:', err);
       
-      // タイムアウトエラーの特別処理
-      if (err.message && (err.message.includes('timeout') || err.message.includes('504') || err.message === 'Failed to fetch')) {
-        setError('タイムアウトエラー: クイズ生成に時間がかかりすぎました。問題数を減らすか、より短いコンテンツでお試しください。');
+      // エラー処理を強化 - 詳細な判定ロジック
+      if (err.message && (
+        // タイムアウト関連のエラーパターン
+        err.message.includes('timeout') || 
+        err.message.includes('504') || 
+        err.message.includes('aborted') || 
+        err.message === 'Failed to fetch' ||
+        // 内部サーバーエラー
+        err.message.includes('500') ||
+        err.message.includes('クイズの生成に失敗')
+      )) {
+        // 具体的な対応策を示すユーザーフレンドリーなメッセージ
+        setError('クイズ生成の処理に問題が発生しました。以下の対策をお試しください:\n' +
+                 '1. 入力するテキスト量を減らす\n' +
+                 '2. 生成する問題数を3問以下にする\n' +
+                 '3. 数分後に再度お試しください');
       } else {
         setError('クイズの生成に失敗しました: ' + err.message);
       }

@@ -56,10 +56,13 @@ export async function generateQuizWithClaude(input: QuizGenerationInput) {
     const prompt = buildQuizPrompt(content, numQuestions, difficulty);
     
     // 問題数に応じて最大トークン数を調整
-    // Serverless Functions環境でも処理時間を短縮するために最適化
-    const baseTokens = 2500;
-    const tokensPerQuestion = 350; // 1問あたりの推定トークン数を縮小
-    const maxTokens = Math.min(baseTokens + (numQuestions * tokensPerQuestion), 5000); // 適切なトークン上限を設定
+    // Serverless Functions環境に最適化されたパラメータ
+    const baseTokens = 3000;
+    const tokensPerQuestion = 500; // 1問あたりの推定トークン数
+    const maxTokens = Math.min(baseTokens + (numQuestions * tokensPerQuestion), 4500); // Serverless環境で最適化された上限
+    
+    // 温度設定を低くして満足度の高い結果を優先
+    const temperature = 0.1; // 低温度設定で確定的な出力を優先
     
     // AWS Bedrockを使用してClaude呼び出し
     // アクセス権限が確認された Claude 3.5 Sonnet モデルを使用
@@ -80,7 +83,7 @@ export async function generateQuizWithClaude(input: QuizGenerationInput) {
         body: JSON.stringify({
           anthropic_version: 'bedrock-2023-05-31',
           max_tokens: maxTokens,
-          temperature: 0.2,
+          temperature: 0.1, // 低温度設定で満足度の高い結果を優先
           top_p: 0.999,
           messages: [
             { role: 'user', content: [{ type: 'text', text: prompt }] }
