@@ -1,9 +1,0 @@
-{
-  "regions": ["iad1"],
-  "functions": {
-    "**/api/generate/**": {
-      "maxDuration": 60
-    }
-  },
-  "crons": []
-}
