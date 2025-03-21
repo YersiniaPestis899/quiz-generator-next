@@ -2,13 +2,13 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  // APIルート処理の最大サイズを増やす（Claudeレスポンス用）
+  // 統合された実験的機能設定
   experimental: {
     serverComponentsExternalPackages: ['@aws-sdk/client-bedrock-runtime'],
-  },
-  // Serverless Functionsの実行時間を拡張
-  serverRuntimeConfig: {
-    maxDuration: 60, // 60秒
+    serverActions: {
+      bodySizeLimit: '4mb',
+      timeout: 60, // 60秒
+    },
   },
 };
 

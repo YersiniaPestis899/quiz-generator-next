@@ -6,9 +6,11 @@ import { QuizGenerationInput, Quiz } from '@/lib/types';
 // Import named export directly to ensure type safety
 import { getUserIdOrAnonymousId } from '@/lib/auth';
 
-// Serverless Functions向けの正しい設定方法
-export const runtime = 'nodejs'; // 'edge' | 'nodejs'
+// Serverless Functions向けの最適な設定
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic'; // 動的レスポンスを強制
+// APIのタイムアウトを拡張（Next.js 14の構文）
+export const maxDuration = 60;
 
 // これは実際の実装です - AWS Bedrock Claude 3.5 Sonnetを使用
 
