@@ -5,31 +5,35 @@ import { detectSpecialCategory, SPECIAL_CATEGORIES } from './specialCategories';
 // BedrockクライアントをシングルトンパターンでNode.js環境で初期化
 let bedrockClient: BedrockRuntimeClient | null = null;
 
+// レート制限用の変数
+let lastRequestTimestamp = 0;
+const RATE_LIMIT_WINDOW = 65000; // 65秒間隔を設定（1分 + 5秒バッファ）
+
 async function getBedrockClient() {
   if (!bedrockClient && typeof process !== 'undefined') {
     // 基本設定オブジェクト
     const clientConfig: any = { 
-    region: process.env.AWS_REGION || 'us-west-2',
-    credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
-    }
+      region: process.env.AWS_REGION || 'us-west-2',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
+      }
     };
     
     try {
-    // NodeHttpHandlerをNode.js環境でのみ動的にインポート
-    if (typeof window === 'undefined') { // ブラウザではなくNode.js環境
-    // Serverless Functions環境用のNodeHttpHandler設定
-    console.log('Serverless Functions環境向けタイムアウト設定を適用します');
-    const { NodeHttpHandler } = await import('@smithy/node-http-handler');
-    clientConfig.requestHandler = new NodeHttpHandler({
-    connectionTimeout: 50000, // 接続確立のタイムアウト: 50秒
-    socketTimeout: 50000,     // データ送受信のタイムアウト: 50秒
-    });
-    console.log('カスタムタイムアウト設定が適用されました: 50秒');
-    }
+      // NodeHttpHandlerをNode.js環境でのみ動的にインポート
+      if (typeof window === 'undefined') { // ブラウザではなくNode.js環境
+        // Serverless Functions環境用のNodeHttpHandler設定
+        console.log('Serverless Functions環境向けタイムアウト設定を適用します');
+        const { NodeHttpHandler } = await import('@smithy/node-http-handler');
+        clientConfig.requestHandler = new NodeHttpHandler({
+          connectionTimeout: 50000, // 接続確立のタイムアウト: 50秒
+          socketTimeout: 50000,     // データ送受信のタイムアウト: 50秒
+        });
+        console.log('カスタムタイムアウト設定が適用されました: 50秒');
+      }
     } catch (error) {
-    console.warn('NodeHttpHandlerのインポートに失敗しました。デフォルトのタイムアウト設定を使用します:', error);
+      console.warn('NodeHttpHandlerのインポートに失敗しました。デフォルトのタイムアウト設定を使用します:', error);
     }
     
     // クライアント初期化
@@ -45,6 +49,20 @@ async function getBedrockClient() {
  */
 export async function generateQuizWithClaude(input: QuizGenerationInput) {
   const { content, numQuestions, difficulty } = input;
+  
+  // レート制限の確認と待機処理
+  const currentTime = Date.now();
+  const timeElapsed = currentTime - lastRequestTimestamp;
+  
+  if (timeElapsed < RATE_LIMIT_WINDOW && lastRequestTimestamp > 0) {
+    // 1分程度前のリクエストがある場合は、待機時間を計算
+    const waitTime = RATE_LIMIT_WINDOW - timeElapsed;
+    console.log(`AWS Bedrockレート制限により、${waitTime}ms待機します...`);
+    
+    // クライアントにレート制限エラーを通知
+    throw new Error('ThrottlingException: AWS Bedrockのレート制限に達しました。このサービスは1分に1回のリクエストまでです。しばらく待ってから再度お試しください。');
+  }
+  
   const bedrockRuntime = await getBedrockClient();
   
   if (!bedrockRuntime) {
@@ -52,8 +70,8 @@ export async function generateQuizWithClaude(input: QuizGenerationInput) {
   }
   
   try {
-    // プロンプト構築
-    const prompt = buildQuizPrompt(content, numQuestions, difficulty);
+    // 二択のまるばつ形式に変更するプロンプトを設定
+    const prompt = buildTrueFalseQuizPrompt(content, numQuestions, difficulty);
     
     // 問題数に応じて最大トークン数を調整
     // Serverless Functions環境に最適化されたパラメータ
@@ -109,10 +127,16 @@ export async function generateQuizWithClaude(input: QuizGenerationInput) {
     }
     
     // JSONをパース
-    const quizData = JSON.parse(jsonMatch[0]);
+    const tfQuizData = JSON.parse(jsonMatch[0]);
+    
+    // まるばつクイズデータを4択クイズ形式に変換
+    const quizData = convertTrueFalseToMultipleChoice(tfQuizData);
     
     // データ検証
     validateQuizData(quizData, numQuestions);
+    
+    // リクエストタイムスタンプを更新
+    lastRequestTimestamp = Date.now();
     
     return quizData;
   } catch (error) {
@@ -122,50 +146,42 @@ export async function generateQuizWithClaude(input: QuizGenerationInput) {
 }
 
 /**
- * クイズ生成用のプロンプトを構築
+ * まるばつ形式のクイズ生成用のプロンプトを構築
  */
-function buildQuizPrompt(content: string, numQuestions: number, difficulty: string) {
+function buildTrueFalseQuizPrompt(content: string, numQuestions: number, difficulty: string) {
   // 特殊カテゴリの検出
   const specialCategory = detectSpecialCategory(content);
   
   // 特殊カテゴリが検出された場合
   if (specialCategory && SPECIAL_CATEGORIES[specialCategory]) {
     const categoryConfig = SPECIAL_CATEGORIES[specialCategory];
-    
-    // コンテンツ変換処理
     const transformedContent = categoryConfig.contentTransform(content);
     
-    // カテゴリ固有のプロンプトテンプレートを適用
-    let promptTemplate = categoryConfig.promptTemplate;
-    
-    // テンプレート内のパラメータ置換
-    promptTemplate = promptTemplate
-      .replace('{numQuestions}', numQuestions.toString())
-      .replace('{difficulty}', difficulty);
-      
-    // 変換コンテンツが存在する場合は、プロンプトに追加
-    const contentSection = transformedContent ? `
+    // まるばつクイズ形式用に調整したテンプレート
+    return `
+以下のコンテンツに基づいて、${numQuestions}問の${difficulty}難易度の「まるばつクイズ（True/Falseクイズ）」を作成してください。
 
-ユーザーが提供したコンテンツ:
-${transformedContent}
+各問題では、文章の内容に基づいて、正しいか間違っているかを判断する必要があります。
+文章の内容を全て反映するような多様な問題を作ります。
 
-上記のコンテンツに基づいてクイズを生成してください。コンテンツの内容を尊重し、そこから直接問題と回答を作成してください。` : '';
-    
-    // 共通JSON構造部分を付加
-    return `${promptTemplate}${contentSection}
+コンテンツ:
+${transformedContent || content}
 
-${getCommonJsonInstructions(numQuestions, difficulty)}`;
+${getTrueFalseJsonInstructions(numQuestions, difficulty)}
+
+JSONオブジェクトのみを返してください。他のテキストは含めないでください。
+質問数を${numQuestions}問にすることを最優先してください。
+`;
   }
   
-  // 標準のクイズ生成プロンプト
+  // 標準のまるばつクイズ生成プロンプト
   return `
-以下の教育コンテンツに基づいて、正確に${numQuestions}問の${difficulty}難易度のクイズを生成してください。
-回答は必ず教育コンテンツ内から正確な情報を使用してください。
-必ず${numQuestions}問をJSON形式で返してください。
+以下の教育コンテンツに基づいて、正確に${numQuestions}問の${difficulty}難易度の「まるばつクイズ（True/Falseクイズ）」を生成してください。
 
-主に正解選択肢に関する詳細な解説に集中してください。不正解の選択肢については、後ほど必要に応じて別途生成されます。
+各問題は「文章が正しい」または「文章が間違っている」かを判断する形式で作成してください。
+文章そのものに加え、「なぜその文章が正しい/間違っているか」の詳細な解説も付けてください。
 
-${getCommonJsonInstructions(numQuestions, difficulty)}
+${getTrueFalseJsonInstructions(numQuestions, difficulty)}
 
 教育コンテンツ:
 ${content}
@@ -176,46 +192,118 @@ JSONオブジェクトのみを返してください。他のテキストは含�
 }
 
 /**
- * 共通のJSON形式指示部分を生成
+ * まるばつクイズ用のJSON形式指示部分を生成
  */
-function getCommonJsonInstructions(numQuestions: number, difficulty: string) {
+function getTrueFalseJsonInstructions(numQuestions: number, difficulty: string) {
   return `回答は以下のJSON構造で返してください:
 
 {
   "questions": [
     {
       "id": "一意のID (UUID形式)",
-      "text": "質問文",
-      "answers": [
-        {
-          "id": "一意のID (UUID形式)",
-          "text": "回答オプション",
-          "explanation": "この選択肢に関する解説"
-        },
-        ...（必ず4つの選択肢を用意してください）
-      ],
-      "correctAnswerId": "正解選択肢のID",
-      "explanation": "正解の詳細な説明（なぜそれが正解なのか）",
-      "incorrectExplanations": {
-        "answer_id1": "この選択肢が不正解である理由の具体的な説明",
-        "answer_id2": "この選択肢が不正解である理由の具体的な説明",
-        "answer_id3": "この選択肢が不正解である理由の具体的な説明"
-      }
+      "text": "評価する文章",
+      "isTrue": trueまたはfalse,
+      "explanation": "なぜこの文章が正しい/間違っているかの詳細な解説"
     },
-    ...（必ず${numQuestions}個の質問を含めてください）
+    ...(必ず${numQuestions}個の質問を含めてください)
   ]
 }
 
 必ず以下の点に注意してください:
 1. 全てのIDはUUID形式で一意であること
-2. 各質問は4つの選択肢を持つこと
-3. 選択肢は明確に区別でき、1つだけが正解であること
-4. 難易度が「${difficulty}」であることを考慮すること
-5. 正解の解説に注力し、学習者が理解しやすいよう具体的かつ教育的な内容にしてください
-6. 不正解選択肢の解説は基本的な内容で構いません。これらは後ほどオンデマンドで生成されます。
-7. incorrectExplanationsオブジェクトのキーは、各不正解選択肢のIDと一致すること（正解選択肢のIDは含めないこと）
-8. 質問数は必ず${numQuestions}問とすること
-9. 説明文は「～です」の丁寧な句読点で終わること`;
+2. isTrueはboolean値で、文章が正しい場合はtrue、間違っている場合はfalse
+3. 複雑過ぎる問題は避け、難易度が「${difficulty}」であることを考慮すること
+4. 解説は入念なものにし、学習者が理解しやすいよう具体的かつ教育的な内容にしてください
+5. 質問数は必ず${numQuestions}問とすること
+6. 説明文は「～です」の丁寧な句読点で終わること`;
+}
+
+/**
+ * まるばつクイズデータを4択クイズ形式に変換
+ * @param {Object} tfQuizData - まるばつクイズデータ
+ * @returns {Object} - 4択形式に変換されたクイズデータ
+ */
+function convertTrueFalseToMultipleChoice(tfQuizData: any) {
+  // 変換結果のクイズデータを初期化
+  const mcQuizData = {
+    questions: []
+  };
+  
+  // 各まるばつ問題を4択問題に変換
+  tfQuizData.questions.forEach((tfQuestion: any) => {
+    // UUIDを生成する関数
+    const generateUUID = () => {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    };
+    
+    // 回答選択肢のIDを生成
+    const trueOptionId = generateUUID();
+    const falseOptionId = generateUUID();
+    const otherOptionId1 = generateUUID();
+    const otherOptionId2 = generateUUID();
+    
+    // 正解選択肢のIDを決定
+    const correctAnswerId = tfQuestion.isTrue ? trueOptionId : falseOptionId;
+    
+    // 選択肢リストを作成
+    const answers = [
+      {
+        id: trueOptionId,
+        text: '正しい'
+      },
+      {
+        id: falseOptionId,
+        text: '間違っている'
+      },
+      {
+        id: otherOptionId1,
+        text: '文章に関連する情報が不足している'
+      },
+      {
+        id: otherOptionId2,
+        text: '部分的に正しいが、完全には正確ではない'
+      }
+    ];
+    
+    // 選択肢をシャッフル
+    for (let i = answers.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [answers[i], answers[j]] = [answers[j], answers[i]];
+    }
+    
+    // 不正解選択肢の説明を生成
+    const incorrectExplanations: Record<string, string> = {};
+    answers.forEach(answer => {
+      if (answer.id !== correctAnswerId) {
+        if (answer.id === trueOptionId || answer.id === falseOptionId) {
+          incorrectExplanations[answer.id] = `この選択肢は不正解です。${tfQuestion.explanation}`;
+        } else if (answer.id === otherOptionId1) {
+          incorrectExplanations[answer.id] = `この選択肢は不正解です。文章には十分な情報が含まれており、評価することが可能です。${tfQuestion.explanation}`;
+        } else {
+          incorrectExplanations[answer.id] = `この選択肢は不正解です。文章は完全に正しいか間違っているかのどちらかであり、部分的に正しいというわけではありません。${tfQuestion.explanation}`;
+        }
+      }
+    });
+    
+    // 4択問題に変換した問題を作成
+    const mcQuestion = {
+      id: tfQuestion.id,
+      text: tfQuestion.text,
+      answers: answers,
+      correctAnswerId: correctAnswerId,
+      explanation: tfQuestion.explanation,
+      incorrectExplanations: incorrectExplanations
+    };
+    
+    // 結果に追加
+    mcQuizData.questions.push(mcQuestion);
+  });
+  
+  // 変換結果を返す
+  return mcQuizData;
 }
 
 /**
