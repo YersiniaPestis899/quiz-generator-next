@@ -1,5 +1,5 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { QuizGenerationInput, Question } from './types';
+import { QuizGenerationInput, Question, Answer } from './types';
 import { detectSpecialCategory, SPECIAL_CATEGORIES } from './specialCategories';
 
 // BedrockクライアントをシングルトンパターンでNode.js環境で初期化
@@ -47,7 +47,7 @@ async function getBedrockClient() {
  * @param {QuizGenerationInput} input - クイズ生成入力パラメータ
  * @returns {Object} - 生成されたクイズデータ
  */
-export async function generateQuizWithClaude(input: QuizGenerationInput) {
+export async function generateQuizWithClaude(input: QuizGenerationInput): Promise<{ questions: Question[] }> {
   const { content, numQuestions, difficulty } = input;
   
   // レート制限の確認と待機処理
@@ -225,7 +225,7 @@ function getTrueFalseJsonInstructions(numQuestions: number, difficulty: string) 
  */
 function convertTrueFalseToMultipleChoice(tfQuizData: any): { questions: Question[] } {
   // 変換結果のクイズデータを初期化
-  const mcQuizData = {
+  const mcQuizData: { questions: Question[] } = {
     questions: []
   };
   
@@ -249,7 +249,7 @@ function convertTrueFalseToMultipleChoice(tfQuizData: any): { questions: Questio
     const correctAnswerId = tfQuestion.isTrue ? trueOptionId : falseOptionId;
     
     // 選択肢リストを作成
-    const answers = [
+    const answers: Answer[] = [
       {
         id: trueOptionId,
         text: '正しい'
@@ -271,7 +271,10 @@ function convertTrueFalseToMultipleChoice(tfQuizData: any): { questions: Questio
     // 選択肢をシャッフル
     for (let i = answers.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [answers[i], answers[j]] = [answers[j], answers[i]];
+      // 型安全なシャッフルスワップ
+      const temp = answers[i];
+      answers[i] = answers[j];
+      answers[j] = temp;
     }
     
     // 不正解選択肢の説明を生成
@@ -298,8 +301,8 @@ function convertTrueFalseToMultipleChoice(tfQuizData: any): { questions: Questio
       incorrectExplanations: incorrectExplanations
     };
     
-    // 結果に追加
-    mcQuizData.questions.push(mcQuestion);
+    // 結果に追加 - 型アサーションによる型安全な操作
+    (mcQuizData.questions as Question[]).push(mcQuestion);
   });
   
   // 変換結果を返す
