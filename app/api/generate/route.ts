@@ -179,7 +179,7 @@ export async function POST(request: NextRequest) {
       title,
       difficulty,
       questionsCount: quiz.questions.length,
-      sampleQuestion: quiz.questions[0]?.text.substring(0, 50) + '...',
+      sampleQuestion: quiz.questions.length > 0 ? quiz.questions[0].text.substring(0, 50) + '...' : '',
       userId
     });
     await saveQuiz(quiz);

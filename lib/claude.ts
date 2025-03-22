@@ -1,5 +1,5 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
-import { QuizGenerationInput } from './types';
+import { QuizGenerationInput, Question } from './types';
 import { detectSpecialCategory, SPECIAL_CATEGORIES } from './specialCategories';
 
 // BedrockクライアントをシングルトンパターンでNode.js環境で初期化
@@ -223,7 +223,7 @@ function getTrueFalseJsonInstructions(numQuestions: number, difficulty: string) 
  * @param {Object} tfQuizData - まるばつクイズデータ
  * @returns {Object} - 4択形式に変換されたクイズデータ
  */
-function convertTrueFalseToMultipleChoice(tfQuizData: any) {
+function convertTrueFalseToMultipleChoice(tfQuizData: any): { questions: Question[] } {
   // 変換結果のクイズデータを初期化
   const mcQuizData = {
     questions: []
@@ -289,7 +289,7 @@ function convertTrueFalseToMultipleChoice(tfQuizData: any) {
     });
     
     // 4択問題に変換した問題を作成
-    const mcQuestion = {
+    const mcQuestion: Question = {
       id: tfQuestion.id,
       text: tfQuestion.text,
       answers: answers,
