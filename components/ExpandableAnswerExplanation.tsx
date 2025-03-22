@@ -37,11 +37,12 @@ const ExpandableAnswerExplanation: React.FC<ExpandableAnswerExplanationProps> = 
       "不正解です",
       "正解は",
       "回答は",
-      "利用できません"
+      "利用できません",
+      "詳細情報はまだ利用できません"
     ];
     
     // テキストにインジケーターが含まれており、短い場合
-    return indicators.some(indicator => text.includes(indicator)) && text.length < 100;
+    return indicators.some(indicator => text.includes(indicator)) && text.length < 150;
   }
   
   // 展開時に自動的により詳細な解説を生成する条件
@@ -159,13 +160,14 @@ const ExpandableAnswerExplanation: React.FC<ExpandableAnswerExplanationProps> = 
             <div className="explanation-text">
               {explanation}
               
-              {/* 不正解選択肢の特別説明生成ボタン */}
-              {!isCorrect && !isGeneratingExplanation && !hasGeneratedBetterExplanation && 
+              {/* 不正解選択肢の詳細解説生成ボタン - 条件を緩和 */}
+              {!isCorrect && !isGeneratingExplanation && 
                questionText && correctOptionText && (
                 <button 
                   className="generate-explanation-btn"
                   onClick={(e) => {
                     e.stopPropagation(); // クリックイベントの伝播を停止
+                    setHasGeneratedBetterExplanation(false); // 強制的にリセットして再生成を許可
                     generateDetailedExplanation();
                   }}
                 >
@@ -289,6 +291,33 @@ const ExpandableAnswerExplanation: React.FC<ExpandableAnswerExplanationProps> = 
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .generate-explanation-btn {
+          display: block;
+          margin-top: 1rem;
+          padding: 0.5rem 1rem;
+          background-color: #2563eb; /* 青系色 */
+          color: white;
+          border: none;
+          border-radius: 0.25rem;
+          font-size: 0.85rem;
+          cursor: pointer;
+          transition: background-color 0.2s ease;
+          width: 100%;
+          max-width: 300px;
+          text-align: center;
+          font-weight: 500;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .generate-explanation-btn:hover {
+          background-color: #1d4ed8; /* ホバー時の色 */
+        }
+        
+        .generate-explanation-btn:active {
+          transform: translateY(1px);
+          box-shadow: none;
         }
         
         .generate-explanation-btn.retry {
