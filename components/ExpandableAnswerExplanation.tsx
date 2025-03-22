@@ -51,40 +51,68 @@ const ExpandableAnswerExplanation: React.FC<ExpandableAnswerExplanationProps> = 
   // 選択肢の詳細な解説を生成
   const generateDetailedExplanation = async () => {
     // 必要な情報が不足している場合は処理しない
-    if (!questionText || !correctOptionText || isCorrect) return;
+    if (!questionText || !correctOptionText || isCorrect) {
+      console.log('詳細解説生成: 必要な情報が不足しています', { questionText, correctOptionText, isCorrect });
+      return;
+    }
     
     try {
+      console.log('詳細解説リクエスト開始:', { 
+        questionId, 
+        incorrectOptionId: answer.id,
+        questionTextLength: questionText?.length,
+        correctOptionTextLength: correctOptionText?.length,
+        incorrectOptionTextLength: answer.text?.length
+      });
+      
       setIsGeneratingExplanation(true);
       
       // より詳細な解説を生成するためのAPIリクエスト
+      const requestBody = {
+        questionText,
+        incorrectOptionText: answer.text,
+        correctOptionText,
+        questionId,
+        incorrectOptionId: answer.id,
+        quizContext
+      };
+      
+      console.log('APIリクエスト送信', requestBody);
+      
       const response = await fetch('/api/explain', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          questionText,
-          incorrectOptionText: answer.text,
-          correctOptionText,
-          questionId,
-          incorrectOptionId: answer.id,
-          quizContext
-        }),
+        body: JSON.stringify(requestBody),
       });
       
+      console.log('APIレスポンス受信:', { status: response.status, ok: response.ok });
+      
       if (!response.ok) {
-        throw new Error('解説の生成に失敗しました');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('APIエラーデータ:', errorData);
+        throw new Error(`解説の生成に失敗しました (${response.status}): ${errorData.message || ''}`);
       }
       
-      const data = await response.json();
+      const data = await response.json().catch(err => {
+        console.error('レスポンスJSONパースエラー:', err);
+        throw new Error('APIレスポンスの解析に失敗しました');
+      });
+      
+      console.log('解説データ受信:', { hasExplanation: !!data.explanation, explanationLength: data.explanation?.length });
       
       // 生成された説明を設定
       if (data.explanation) {
         setExplanation(data.explanation);
         setHasGeneratedBetterExplanation(true);
+      } else {
+        console.warn('APIから説明が返されませんでした', data);
+        throw new Error('APIから解説データが返されませんでした');
       }
     } catch (error) {
       console.error('説明生成エラー:', error);
+      setExplanation(defaultExplanation + '\n\n(詳細解説の生成に失敗しました。時間をおいて再度お試しください。)');
     } finally {
       setIsGeneratingExplanation(false);
     }
@@ -142,6 +170,20 @@ const ExpandableAnswerExplanation: React.FC<ExpandableAnswerExplanationProps> = 
                   }}
                 >
                   より詳細な解説を生成
+                </button>
+              )}
+              
+              {/* 解説生成失敗リトライボタン */}
+              {!isCorrect && !isGeneratingExplanation && explanation.includes('詳細解説の生成に失敗しました') && (
+                <button 
+                  className="generate-explanation-btn retry"
+                  onClick={(e) => {
+                    e.stopPropagation(); // クリックイベントの伝播を停止
+                    setHasGeneratedBetterExplanation(false); // 状態をリセット
+                    generateDetailedExplanation();
+                  }}
+                >
+                  解説生成を再試行
                 </button>
               )}
             </div>
@@ -247,6 +289,15 @@ const ExpandableAnswerExplanation: React.FC<ExpandableAnswerExplanationProps> = 
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(-10px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .generate-explanation-btn.retry {
+          background-color: #6366f1; /* インディゴ */
+          margin-top: 0.5rem;
+        }
+        
+        .generate-explanation-btn.retry:hover {
+          background-color: #4f46e5;
         }
       `}</style>
     </div>

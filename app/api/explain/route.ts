@@ -6,13 +6,31 @@ let bedrockClient: BedrockRuntimeClient | null = null;
 
 function getBedrockClient() {
   if (!bedrockClient && typeof process !== 'undefined') {
-    bedrockClient = new BedrockRuntimeClient({ 
-      region: process.env.AWS_REGION || 'us-west-2',
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || ''
+    try {
+      console.log('Bedrockクライアントを初期化します...', { 
+        region: process.env.AWS_REGION,
+        hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+        hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY
+      });
+      
+      if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
+        console.error('AWS認証情報が不足しています');
+        throw new Error('AWS認証情報が不足しています');
       }
-    });
+      
+      bedrockClient = new BedrockRuntimeClient({ 
+        region: process.env.AWS_REGION || 'us-west-2',
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        }
+      });
+      
+      console.log('Bedrockクライアントの初期化に成功しました');
+    } catch (error) {
+      console.error('Bedrockクライアントの初期化エラー:', error);
+      throw error;
+    }
   }
   return bedrockClient;
 }
@@ -23,8 +41,20 @@ function getBedrockClient() {
  */
 export async function POST(request: NextRequest) {
   try {
+    console.log('API: 解説リクエスト受信');
+    
     // リクエストボディからパラメータを取得
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch (error) {
+      console.error('API: リクエストJSON解析エラー:', error);
+      return NextResponse.json(
+        { message: '無効なリクエストフォーマット' }, 
+        { status: 400 }
+      );
+    }
+    
     const { 
       questionText,       // 問題文
       incorrectOptionText, // 不正解選択肢の文
@@ -34,24 +64,42 @@ export async function POST(request: NextRequest) {
       quizContext         // クイズの全体的なコンテキスト (オプション)
     } = body;
     
-    console.log('API: Received explanation request for:', {
+    console.log('API: 解説リクエストデータ:', {
       questionId,
       incorrectOptionId,
-      questionText: questionText?.substring(0, 50) + '...',
+      hasQuestionText: !!questionText,
+      questionTextLength: questionText?.length,
+      hasIncorrectOptionText: !!incorrectOptionText,
+      hasCorrectOptionText: !!correctOptionText,
+      incorrectOptionTextLength: incorrectOptionText?.length,
+      correctOptionTextLength: correctOptionText?.length,
+      hasQuizContext: !!quizContext,
     });
     
     // 必須パラメータの検証
     if (!questionText || !incorrectOptionText || !correctOptionText) {
+      console.warn('API: 必須パラメータの欠落');
       return NextResponse.json(
         { message: '問題文、不正解選択肢、正解選択肢は必須です' }, 
         { status: 400 }
       );
     }
     
+    console.log('API: Bedrockクライアントを取得中...');
+    
     // AWS Bedrockクライアントの初期化
-    const bedrockRuntime = getBedrockClient();
-    if (!bedrockRuntime) {
-      throw new Error('Bedrock clientの初期化に失敗しました');
+    let bedrockRuntime;
+    try {
+      bedrockRuntime = getBedrockClient();
+      if (!bedrockRuntime) {
+        throw new Error('Bedrock clientの取得に失敗しました');
+      }
+    } catch (error) {
+      console.error('API: Bedrockクライアント初期化エラー:', error);
+      return NextResponse.json(
+        { message: 'AIサービスへの接続に失敗しました' }, 
+        { status: 500 }
+      );
     }
     
     // プロンプトの作成（詳細な説明を要求）
@@ -64,22 +112,37 @@ export async function POST(request: NextRequest) {
     
     // Claude 3.5 Sonnetを呼び出して詳細な説明を生成
     const modelId = 'anthropic.claude-3-5-sonnet-20241022-v2:0';
-    const response = await bedrockRuntime.send(
-      new InvokeModelCommand({
-        modelId,
-        contentType: 'application/json',
-        accept: 'application/json',
-        body: JSON.stringify({
-          anthropic_version: 'bedrock-2023-05-31',
-          max_tokens: 1000,
-          temperature: 0.2,
-          top_p: 0.95,
-          messages: [
-            { role: 'user', content: [{ type: 'text', text: prompt }] }
-          ]
-        })
+    console.log(`API: Bedrockモデル ${modelId} を呼び出しています`);
+    
+    const requestParams = {
+      modelId,
+      contentType: 'application/json',
+      accept: 'application/json',
+      body: JSON.stringify({
+        anthropic_version: 'bedrock-2023-05-31',
+        max_tokens: 1000,
+        temperature: 0.2,
+        top_p: 0.95,
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: prompt }] }
+        ]
       })
-    );
+    };
+    
+    let response;
+    try {
+      console.log('API: Bedrockにリクエスト送信開始...');
+      response = await bedrockRuntime.send(new InvokeModelCommand(requestParams));
+      console.log('API: Bedrockからレスポンスを受信しました');
+    } catch (error) {
+      console.error('API: Bedrockモデル呼び出しエラー:', error);
+      // AWS SDKエラーの詳細情報をログに出力
+      if (error.name) console.error('Error name:', error.name);
+      if (error.code) console.error('Error code:', error.code);
+      if (error.$metadata) console.error('Error metadata:', error.$metadata);
+      
+      throw new Error(`Bedrock APIエラー: ${error.name || error.message || '不明なエラー'}`);
+    }
     
     // レスポンスの処理
     if (!response.body) {
