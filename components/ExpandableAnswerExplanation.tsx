@@ -120,7 +120,17 @@ const ExpandableAnswerExplanation: React.FC<ExpandableAnswerExplanationProps> = 
   };
   
   // 展開時に自動的に詳細な解説を生成
-  const handleExpand = async () => {
+  const handleExpand = async (e: React.MouseEvent) => {
+    // ボタンのクリックイベントと区別するためのイベントターゲット確認
+    const target = e.target as HTMLElement;
+    const isButtonClick = target.tagName === 'BUTTON' || 
+                         target.closest('.explanation-button-container') !== null;
+    
+    // ボタンクリックはここでは処理しない
+    if (isButtonClick) {
+      return;
+    }
+    
     // 現在の状態を反転
     const newExpandedState = !isExpanded;
     setIsExpanded(newExpandedState);
@@ -163,30 +173,34 @@ const ExpandableAnswerExplanation: React.FC<ExpandableAnswerExplanationProps> = 
               {/* 不正解選択肢の詳細解説生成ボタン - 条件を緩和 */}
               {!isCorrect && !isGeneratingExplanation && 
                questionText && correctOptionText && (
-                <button 
-                  className="generate-explanation-btn"
-                  onClick={(e) => {
-                    e.stopPropagation(); // クリックイベントの伝播を停止
-                    setHasGeneratedBetterExplanation(false); // 強制的にリセットして再生成を許可
-                    generateDetailedExplanation();
-                  }}
-                >
-                  より詳細な解説を生成
-                </button>
+                <div className="explanation-button-container" onClick={(e) => e.stopPropagation()}>
+                  <button 
+                    className="custom-explanation-button"
+                    onClick={() => {
+                      // 状態リセットと解説生成処理を行う
+                      setHasGeneratedBetterExplanation(false);
+                      generateDetailedExplanation();
+                    }}
+                  >
+                    より詳細な解説を生成
+                  </button>
+                </div>
               )}
               
               {/* 解説生成失敗リトライボタン */}
               {!isCorrect && !isGeneratingExplanation && explanation.includes('詳細解説の生成に失敗しました') && (
-                <button 
-                  className="generate-explanation-btn retry"
-                  onClick={(e) => {
-                    e.stopPropagation(); // クリックイベントの伝播を停止
-                    setHasGeneratedBetterExplanation(false); // 状態をリセット
-                    generateDetailedExplanation();
-                  }}
-                >
-                  解説生成を再試行
-                </button>
+                <div className="explanation-button-container" onClick={(e) => e.stopPropagation()}>
+                  <button 
+                    className="custom-explanation-button retry"
+                    onClick={() => {
+                      // 状態をリセット
+                      setHasGeneratedBetterExplanation(false);
+                      generateDetailedExplanation();
+                    }}
+                  >
+                    解説生成を再試行
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -293,39 +307,48 @@ const ExpandableAnswerExplanation: React.FC<ExpandableAnswerExplanationProps> = 
           to { opacity: 1; transform: translateY(0); }
         }
         
-        .generate-explanation-btn {
-          display: block;
+        .explanation-button-container {
           margin-top: 1rem;
-          padding: 0.5rem 1rem;
-          background-color: #2563eb; /* 青系色 */
-          color: white;
-          border: none;
-          border-radius: 0.25rem;
-          font-size: 0.85rem;
-          cursor: pointer;
-          transition: background-color 0.2s ease;
+          position: relative;
+          z-index: 10;
+        }
+        
+        .custom-explanation-button {
+          display: inline-block;
           width: 100%;
-          max-width: 300px;
-          text-align: center;
-          font-weight: 500;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-        
-        .generate-explanation-btn:hover {
-          background-color: #1d4ed8; /* ホバー時の色 */
-        }
-        
-        .generate-explanation-btn:active {
-          transform: translateY(1px);
-          box-shadow: none;
-        }
-        
-        .generate-explanation-btn.retry {
-          background-color: #6366f1; /* インディゴ */
+          padding: 0.75rem 1.25rem;
           margin-top: 0.5rem;
+          background-color: #2563eb;
+          color: white;
+          font-weight: 500;
+          font-size: 0.875rem;
+          border: none;
+          border-radius: 0.375rem;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          cursor: pointer;
+          transition: all 0.2s ease;
+          text-align: center;
+          position: relative;
+          z-index: 20;
         }
         
-        .generate-explanation-btn.retry:hover {
+        .custom-explanation-button:hover {
+          background-color: #1d4ed8;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+        
+        .custom-explanation-button:active {
+          transform: translateY(1px);
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+        
+        .custom-explanation-button.retry {
+          background-color: #6366f1;
+          margin-top: 0.75rem;
+        }
+        
+        .custom-explanation-button.retry:hover {
           background-color: #4f46e5;
         }
       `}</style>
