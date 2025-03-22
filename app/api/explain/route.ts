@@ -27,7 +27,7 @@ function getBedrockClient() {
       });
       
       console.log('Bedrockクライアントの初期化に成功しました');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Bedrockクライアントの初期化エラー:', error);
       throw error;
     }
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     let body;
     try {
       body = await request.json();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('API: リクエストJSON解析エラー:', error);
       return NextResponse.json(
         { message: '無効なリクエストフォーマット' }, 
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       if (!bedrockRuntime) {
         throw new Error('Bedrock clientの取得に失敗しました');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('API: Bedrockクライアント初期化エラー:', error);
       return NextResponse.json(
         { message: 'AIサービスへの接続に失敗しました' }, 
@@ -134,14 +134,21 @@ export async function POST(request: NextRequest) {
       console.log('API: Bedrockにリクエスト送信開始...');
       response = await bedrockRuntime.send(new InvokeModelCommand(requestParams));
       console.log('API: Bedrockからレスポンスを受信しました');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('API: Bedrockモデル呼び出しエラー:', error);
-      // AWS SDKエラーの詳細情報をログに出力
-      if (error.name) console.error('Error name:', error.name);
-      if (error.code) console.error('Error code:', error.code);
-      if (error.$metadata) console.error('Error metadata:', error.$metadata);
+      // AWS SDKエラーの詳細情報をログに出力（型安全な方法で）
+      if (error && typeof error === 'object') {
+        if ('name' in error) console.error('Error name:', error.name);
+        if ('code' in error) console.error('Error code:', error.code);
+        if ('$metadata' in error) console.error('Error metadata:', error.$metadata);
+      }
       
-      throw new Error(`Bedrock APIエラー: ${error.name || error.message || '不明なエラー'}`);
+      // エラーメッセージを型安全に構築
+      const errorMessage = error && typeof error === 'object' && 'message' in error 
+        ? String(error.message) 
+        : '不明なエラー';
+      
+      throw new Error(`Bedrock APIエラー: ${errorMessage}`);
     }
     
     // レスポンスの処理
@@ -162,7 +169,7 @@ export async function POST(request: NextRequest) {
       incorrectOptionId
     });
     
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('API: Error generating explanation:', error);
     
     // エラーオブジェクトの安全な処理
